@@ -1,0 +1,799 @@
+---
+title: "MC1RSY"
+author: "Tobias Lauber"
+date: "2023-10-05"
+output: html_document
+---
+# 1. Load librarys
+```{r setup, include=FALSE}
+library(tidyverse)
+library(recommenderlab)
+library(lsa) # might need for cosine function
+library(dplyr)
+library(tidyr) # for plot
+```
+
+für Kapitel in Outline schauen. Kapitel starten mit Hash. Unterkapitel mit hashhash. unter unter hashhashhash
+
+# 2. load data
+```{r cars}
+data("MovieLense")
+str(MovieLense)
+```
+## 2.1 Own testing
+```{r}
+summary(MovieLense)
+```
+type:
+```{r}
+class(MovieLense)
+```
+see it as data frame
+```{r}
+# Convert the realRatingMatrix to a data frame
+movie_data <- as(MovieLense, "data.frame")
+
+
+# View the first few rows of the data frame
+head(movie_data, 20)
+```
+```{r}
+column_names <- colnames(MovieLense)
+#print(column_names)
+```
+
+
+# 6.1 Explorative Datenanalyse [10 Punkte]
+1)
+```{r}
+#we look at slotnames
+slotNames(MovieLense)
+```
+
+```{r}
+#classes
+class(MovieLense@data)
+```
+We now look at all the unique vector ratings
+```{r}
+vector_ratings <- as.vector(MovieLense@data)
+unique(vector_ratings)
+```
+A rating of 0 indicates a missing rating, so we have to remove it
+```{r}
+vector_ratings <- vector_ratings[vector_ratings != 0]
+```
+
+we now look, how often a movie was watched, with the help of a dataframe
+
+```{r}
+views_per_movie <- colCounts(MovieLense)
+
+dfrat <- data.frame(
+  movie = names(views_per_movie),
+  views = views_per_movie
+  )
+dfviews <- dfrat[order(dfviews$views, decreasing = TRUE), ]
+head(dfviews)
+```
+here we have our 10 most watched movies as a plot
+
+```{r}
+ggplot(dfviews[1:10, ], aes(x = movie, y = views)) +
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Number of views of the top movies")
+```
+
+##genres
+
+genres are in movielensemeta data.
+1 means the genre is represent in the movie.
+0 means it is not.
+By using that logic, we can summarise the columns, and the result is the number of occurenses of the genres in movielense.
+```{r}
+#Create new df and remove useless columns
+popular_genresdf <- MovieLenseMeta %>% select(-c('title', 'year', 'url'))
+
+# count the number of columns
+views_per_genre <- popular_genresdf %>%
+  summarise(across(everything(), sum)) %>%
+  arrange(desc(views_per_genre))
+
+views_per_genre
+```
+```{r}
+# Convert data to the pivot long format
+views_per_genre_long <- views_per_genre %>%
+  pivot_longer(everything(), names_to = "Column", values_to = "Sum")
+
+# Create a bar plot
+ggplot(views_per_genre_long, aes(x = Column, y = Sum, fill = Column)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = Sum), vjust = -0.5) +  # Add labels above the bars
+  labs(title = "Sum of Each Genre", x = "Genre", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+# Rotate xaxis
+  coord_cartesian(ylim = c(0, max(views_per_genre_long$Sum) + 200)) +
+  guides(fill = 'none')
+
+
+```
+
+## 6.1  2)
+
+```{r}
+MovieLenseMeta
+```
+
+```{r}
+colnames(movie_data)
+```
+
+
+```{r}
+movie_data
+```
+
+We need to join the 2 dataframes. The only thing they have in common are the movie titles. So that is 
+```{r}
+# Merge the data frames based on movie titles. We will further use this
+
+merged_data <- left_join(movie_data, MovieLenseMeta, 
+                         by = c("item" = "title"))
+
+# Create a new data frame with genres and ratings
+genre_ratings <- merged_data %>%
+  select(Action:Western, rating) %>%
+  gather(genre, is_genre, Action:Western) %>%
+  filter(is_genre == 1) %>%
+  group_by(genre) %>%
+  summarize(
+    avg_rating = mean(rating),
+    median_rating = median(rating)
+  )
+
+ggplot(genre_ratings, aes(x = genre, y = avg_rating, fill = avg_rating)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(avg_rating, 2), vjust = -0.5), size = 3) +
+  coord_cartesian(ylim = c(0,5)) +
+  xlab("Genre") +
+  ylab("Average Rating") +
+  ggtitle("Distribution of Ratings by Genre")+
+  scale_fill_gradient(low = "black", high = "blue") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## 6.1 3)
+
+```{r}
+merged_data
+```
+Mittlere Rating Filme
+```{r}
+# Gruppiere nach Filme und berechne den Durchschnitt
+
+average_ratings_per_movie <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+median_rating <- median(average_ratings_per_movie$mean_rating)
+min_rating <- min(average_ratings_per_movie$mean_rating)
+max_rating <- max(average_ratings_per_movie$mean_rating)
+mean_rating <- mean(average_ratings_per_movie$mean_rating)
+
+# Resultate
+cat("Median Filmbewertung:", median_rating, "\n")
+cat("Minimale Filmbewertung:", min_rating, "\n")
+cat("Maximale Filmbewertung:", max_rating, "\n")
+cat("Durchschnittliche Filmbewertung:", mean_rating, "\n")
+```
+Plot Mittlere Rating Filme
+```{r}
+average_ratings_per_movie <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+# Plot
+ggplot(data = average_ratings_per_movie, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(title = "Durchschnittliche Ratings Filme",
+       x = "Durchschnittliche Bewertung",
+       y = "Nummer an Filmen")
+```
+
+
+Mittlere Ratings User
+```{r}
+average_ratings_per_user <- merged_data %>%
+  group_by(user) %>%
+  summarize(mean_rating = mean(rating))
+
+median_rating <- median(average_ratings_per_user$mean_rating)
+min_rating <- min(average_ratings_per_user$mean_rating)
+max_rating <- max(average_ratings_per_user$mean_rating)
+mean_rating <- mean(average_ratings_per_user$mean_rating)
+
+# Resultate
+cat("Median durchschnittliche Userbewertung:", median_rating, "\n")
+cat("Minimale durchschnittliche Userbewertung:", min_rating, "\n")
+cat("Maximale durchschnittliche Userbewertung:", max_rating, "\n")
+cat("Durchschnittliche durchschnittliche Userbewertung:", mean_rating, "\n")
+```
+Plot Mittlere Ratings User
+```{r}
+ggplot(data = average_ratings_per_user, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(title = "Durchschnittliche Ratings User",
+       x = "Durchschnittliche Bewertung",
+       y = "Nummer an Usern")
+```
+
+
+## 6.1 4)
+
+```{r}
+normalized_ratings <- merged_data %>%
+  group_by(user) %>%
+  mutate(normalized_rating = (rating - mean(rating)) / sd(rating))
+
+median_normalized_rating <- median(normalized_ratings$normalized_rating)
+min_normalized_rating <- min(normalized_ratings$normalized_rating)
+max_normalized_rating <- max(normalized_ratings$normalized_rating)
+mean_normalized_rating <- mean(normalized_ratings$normalized_rating)
+
+# Resultate
+cat("Median der normalisierten avg Userbewertungen:", median_normalized_rating, "\n")
+cat("Minimale normalisierte avg Userbewertung:", min_normalized_rating, "\n")
+cat("Maximale normalisierte avg Userbewertung:", max_normalized_rating, "\n")
+cat("Durchschnittliche normalisierte avg Userbewertung:", mean_normalized_rating, "\n")
+```
+Plot die Durchschnittliche Userratings. Diesmal mit ner Z score Normalisierung
+```{r}
+ggplot(data = normalized_ratings, aes(x = normalized_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(title = "Durchschnittliche Ratings User",
+       x = "Durchschnittliche Bewertung",
+       y = "Nummer an Usern")
+```
+Wir können sehen, das mithilfe von Normalisierung sich der Graph nach links verschiebt -> Der urchschnitt der User Ratings ist schlechter.
+
+
+## 6.1 5)
+```{r}
+colnames(merged_data)
+```
+#Einschub ir nehmen jetzt normalized ratings
+```{r}
+matrix_stand <- normalize(MovieLense, method="Z-Score")
+movie_data <- as(matrix_stand, "data.frame") #movie lense durch matrix stand
+merged_data <- left_join(movie_data, MovieLenseMeta, 
+                         by = c("item" = "title"))
+
+```
+
+
+# 6.2 Datenreduktion [6 Punkte]
+600 nutzer und 700 Filme
+
+```{r}
+# Filtere 400 aktivste users
+top_400_users <- merged_data %>%
+  group_by(user) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(1:400) %>%
+  select(user)
+
+
+# Filter the top 700 movies
+top_movies <- merged_data %>%
+  group_by(item) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(1:700) %>%
+  select(item)
+
+# Reduziere dataset für Filme und User
+top_400_data <- merged_data %>%
+  filter(user %in% top_400_users$user, item %in% top_movies$item)
+
+```
+For 400
+
+Before
+```{r}
+num_users_before <- length(unique(merged_data$user))
+num_movies_before <- length(unique(merged_data$item))
+sparsity_before <- 1 - (nrow(merged_data) / (num_users_before * num_movies_before))
+
+# Output before reduction
+cat("Number of users before reduction:", num_users_before, "\n")
+cat("Number of movies before reduction:", num_movies_before, "\n")
+cat("Sparsity before reduction:", sparsity_before, "\n")
+```
+
+After
+```{r}
+num_users_after <- length(unique(top_400_data$user))
+num_movies_after <- length(unique(top_400_data$item))
+sparsity_after <- 1 - (nrow(top_400_data) / (num_users_after * num_movies_after))
+
+# Output after reduction
+cat("Number of users after reduction:", num_users_after, "\n")
+cat("Number of movies after reduction:", num_movies_after, "\n")
+cat("Sparsity after reduction:", sparsity_after, "\n")
+```
+Das macht Sinn, denn wenn wir die User welche weniger Filme schauen rauskicken, dann sollte sich die Sparsity veringern.
+
+plot Avarage ratings. Wir benutzen gridExtra für einfaches plotten
+
+```{r}
+library(gridExtra)
+
+avg_ratings_400 <- top_400_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg_ratings_full <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg400 <- ggplot(data = avg_ratings_400, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(title = "400er Reduktion",
+       x = "Durchschnittliche Bewertung",
+       y = "Anzahl Filme")
+
+avgfull <- ggplot(data = avg_ratings_full, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = 'blue', color = 'black') +
+  labs(title = 'voller Datensatz',
+       x = "Durchschnittliche Bewertung",
+       y = "Anzahl Filme")
+
+grid.arrange(avg400, avgfull, ncol = 2) 
+
+```
+
+
+600
+
+```{r}
+top_600_users <- merged_data %>%
+  group_by(user) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(201:600) %>%
+  select(user)
+
+# Filter the top 700 movies
+top_movies <- merged_data %>%
+  group_by(item) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(1:700) %>%
+  select(item)
+
+# Reduziere dataset für Filme und User
+top_600_data <- merged_data %>%
+  filter(user %in% top_600_users$user, item %in% top_movies$item)
+```
+
+
+Nochmal, das war bevor der Datenreduktion
+```{r}
+num_users_before <- length(unique(merged_data$user))
+num_movies_before <- length(unique(merged_data$item))
+sparsity_before <- 1 - (nrow(merged_data) / (num_users_before * num_movies_before))
+
+# Output before reduction
+cat("Number of users before reduction:", num_users_before, "\n")
+cat("Number of movies before reduction:", num_movies_before, "\n")
+cat("Sparsity before reduction:", sparsity_before, "\n")
+```
+Das ist nachdem man auf die 600 relevantesten User reduziert hat, ohne die 200 relevantesten User.
+
+Plot average ratings für 600
+```{r}
+avg_ratings_600 <- top_600_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg_ratings_full <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg600 <- ggplot(data = avg_ratings_600, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(title = "600er Reduktion",
+       x = "Durchschnittliche Bewertung",
+       y = "Anzahl Filme")
+
+avgfull <- ggplot(data = avg_ratings_full, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = 'blue', color = 'black') +
+  labs(title = 'voller Datensatz',
+       x = "Durchschnittliche Bewertung",
+       y = "Anzahl Filme")
+
+grid.arrange(avg600, avgfull, ncol = 2) 
+```
+
+
+
+```{r}
+num_users_after <- length(unique(top_600_data$user))
+num_movies_after <- length(unique(top_600_data$item))
+sparsity_after <- 1 - (nrow(top_600_data) / (num_users_after * num_movies_after))
+
+# Output after reduction
+cat("Number of users after reduction:", num_users_after, "\n")
+cat("Number of movies after reduction:", num_movies_after, "\n")
+cat("Sparsity after reduction:", sparsity_after, "\n")
+```
+
+Die Sparsity ist zwar besser als zuvor, aber natürlich schlechter als bei den top 400 Usern, da man statt den 200 meist aktivsten Usern die 401-600 aktivsten Nutzer hat. 
+
+
+## 6.2 3)
+
+```{r}
+head(top_400_data)
+```
+Die Formel ist: 
+
+IOU = (# gemeinsame Filme) / (#Filme in beiden df zusammen )
+
+```{r}
+# Distinkte Movies / User für die Beiden Dataframes
+anzahl_movies_400 <- n_distinct(top_400_data$item)
+anzahl_users_400 <- n_distinct(top_400_data$user)
+
+anzahl_movies_600 <- n_distinct(top_600_data$item)
+anzahl_users_600 <- n_distinct(top_600_data$user)
+
+# Intersection
+common_movies <- intersect(top_400_data$item, top_600_data$item)
+common_users <- intersect(top_400_data$user, top_600_data$user)
+
+#IOU
+IOU_movies <- length(common_movies) / (anzahl_movies_400 + anzahl_movies_600 - length(common_movies))
+
+IOU_users <- length(common_users) / (anzahl_users_400 + 
+              anzahl_users_600 - length(common_users))
+
+cat("Intersection over Union für Filme:", IOU_movies, "\n")
+cat("Intersection over Union für Nutzer:", IOU_users, "\n")
+```
+Dieses Resultat war nach unserer Datentrennung logisch, da wir die gleichen Filme verwenden und 0.333 macht auch Sinn, da nur die User 201-400 in beiden dataframes vorkommen.
+
+
+
+
+# 6.3 Analyse Ähnlichkeitsmatrix [12 Punkte]
+
+```{r}
+#create real rating matrix
+rrm_400 <- top_400_data[, c("user", "item", "rating")]
+rrm_400 <- as(rrm_400, 'realRatingMatrix')
+#str(rrm_400)
+```
+
+```{r}
+#real rating matrix 600
+rrm_600 <- top_600_data[, c("user", "item", "rating")]
+rrm_600 <- as(rrm_600, 'realRatingMatrix')
+```
+
+
+## Datensatz 400
+Create traintestsplit
+```{r}
+set.seed(7)
+my_sample <- sample(c(TRUE,FALSE), nrow(rrm_400), replace = TRUE,
+                    prob = c(0.8, 0.2))
+
+train_400 <- rrm_400[my_sample, ]
+test_400 <- rrm_400[!my_sample, ]
+```
+
+Item Based Collaberative Filtering for 400 rrm
+```{r}
+IBCF_model <- Recommender(train_400, method = 'IBCF',
+                          param = list(method = 'Cosine', k = 30))
+```
+
+Now we plot a heatmap of the top_400 similarity matrix
+```{r}
+sim_400 <- getModel(IBCF_model)$sim
+image(getModel(IBCF_model)$sim, 
+      main = 'top_400 similarity matrix Heatmap')
+```
+
+## 6.3 3)
+generelle Verteilung der Anzahl an 'Auftauchen' in der Cosine Ähnlichkeitsmatrix
+```{r}
+sums400 <- colSums(sim_400 != 0) 
+twentytop_400 <- head(sort(sums400, decreasing = TRUE), 20)
+hist(sums400, breaks = 50, main = 'Distribution in Similarity Matrix sim_400', xlab = '#Auftauchungen', ylab = '#Movies')
+```
+Wir sehen, dass ein grosser ANteil an Movies gar nicht bis nur sehr wenig vorkommt. Der grösste ANteil an Filmen liegt zwischen 0 und 50 Auftauchungen. Die anzahl Filme pro Auftauchungen nehmen je grösser die #Auftauchungen werden immer mehr ab
+
+
+
+```{r}
+twentytop_400
+```
+Dies hier sind die 20 Filme, welche die meiste #Auftauchungen hatten.
+
+Analyse mit top_400_data
+```{r}
+ggplot() + geom_histogram(data = top_400_data %>% group_by(item) %>%
+                            count(), aes(n), binwidth = 0.05, color = 'blue', fill = 'white', alpha = 0.5) +
+  labs(title = 'top_400_data: Number of Ratings per Movie',
+       x = '#ratings', y = '#movies', subtitle = 'top 20 Movies from cos IBCF from above in green') +
+  geom_vline(xintercept = twentytop_400, color = 'green')
+```
+
+Unsere Filme des IBCF sind eher im Mittelfeld der ratings. Wir fragen uns, ob wir dies vielleicht nicht noch optimieren können.
+
+
+HYPOTHESE: Durch das entfernen von NA werten aus unserer Similarity Matrix, werden Filme mit mehr Ratings gewählt. Wir werden diese Hypothese
+nachdem wir die Ratings dieser gewählten Filme anschauen überprüfen.
+
+
+Ratings der 20 Filme
+```{r}
+names_twentytop_400 <- names(twentytop_400)
+
+top20simmrat = top_400_data %>% group_by(item) %>% 
+  filter(item %in% names_twentytop_400)
+
+ggplot() + geom_histogram(data = top20simmrat, aes(rating), binwidth = 0.1) + facet_wrap(vars(top20simmrat$item)) +
+  labs(x = ' normalized_ratings', 
+       y = '#ratings', title = 'Movie ratings distribution')
+```
+
+## Datensatz 600
+
+
+```{r}
+#real rating matrix 600
+rrm_600 <- top_600_data[, c("user", "item", "rating")]
+rrm_600 <- as(rrm_600, 'realRatingMatrix')
+```
+
+traintest split
+```{r}
+set.seed(7)
+my_sample <- sample(c(TRUE,FALSE), nrow(rrm_600), replace = TRUE,
+                    prob = c(0.8, 0.2))
+
+train_600 <- rrm_600[my_sample, ]
+test_600 <- rrm_600[!my_sample, ]
+```
+
+
+Item Based Collaberative Filtering for 600 rrm
+```{r}
+IBCF_model <- Recommender(train_600, method = 'IBCF',
+                          param = list(method = 'Cosine', k = 30))
+```
+
+Now we plot a heatmap of the top_600 similarity matrix
+```{r}
+sim_600 <- getModel(IBCF_model)$sim
+image(getModel(IBCF_model)$sim, 
+      main = 'top_600 similarity matrix Heatmap')
+```
+
+generelle Verteilung der Anzahl an 'Auftauchen' in der Cosine Ähnlichkeitsmatrix
+```{r}
+sums600 <- colSums(sim_600 != 0) 
+twentytop_600 <- head(sort(sums600, decreasing = TRUE), 20)
+hist(sums600, breaks = 50, main = 'Distribution in Similarity Matrix sim_600', xlab = '#Auftauchungen', ylab = '#Movies')
+```
+Wir sehen, dass die meisten Auftauchungen hier klar um 0 sind.
+
+Hier sind unsere 20 hüfigsten Filme
+```{r}
+twentytop_600
+```
+Interessant ist das Filme 'Fallen (1998)' welcher am meisten im
+Datensatz 400 auftrat, hier nicht einmal die top20 schafft.
+
+
+Analyse mit top_600_data
+```{r}
+ggplot() + geom_histogram(data = top_600_data %>% group_by(item) %>%
+                            count(), aes(n), binwidth = 0.05, color = 'blue', fill = 'white', alpha = 0.5) +
+  labs(title = 'top_600_data: Number of Ratings per Movie',
+       x = '#ratings', y = '#movies', subtitle = 'top 20 Movies from cos IBCF from above in green') +
+  geom_vline(xintercept = twentytop_600, color = 'green')
+```
+Wir nehmen erneut Filme mit einigen Ratings, aber nicht die Filme mit den
+meisten Ratings. Wir schauen noch, ob sich das ganze optimieren lässt.
+
+## Na durch 0 ersetzten. In Arbeit
+```{r}
+
+```
+
+
+# 6.4
+Als erstes wählen wir 100 zufällige Filme. 
+```{r}
+set.seed(7)
+index <- sort(sample(1:nrow(MovieLense), 100)) #wähle 100 zufällige Filme
+oursample <- MovieLense[index]
+#reguläre Werte Matrix
+oursample_Matrix <- as(oursample, "matrix")
+oursample_Matrix[is.na(oursample_Matrix)] <- 0 #ersetze na durch 0
+
+#binäre Werte Matrix
+oursample_bin <- binarize(oursample,4)
+oursample_Matrix_bin <- as(oursample_bin, "matrix")
+```
+
+Nun erstellen wir eine Jaccard SImilarity Funktion
+
+```{r}
+jaccard_similarity <- function(M) {
+  A <- tcrossprod(M)
+  im <- which(A > 0, arr.ind=TRUE)
+  b <- rowSums(M)
+  Aim <- A[im]
+  sparseMatrix(
+    i = im[,1],
+    j = im[,2],
+    x = Aim / (b[im[,1]] + b[im[,2]] - Aim),
+    dims = dim(A)
+  )
+}
+```
+
+
+Wir nutzen die Jaccard similarity Funktion auf unsere binären Daten
+```{r}
+jaccard_sim = as(jaccard_similarity(oursample_Matrix_bin), "matrix")
+```
+
+Wir erstellen eine Cosinus Similarity Funktion
+```{r}
+cosinus_similarity <- function(M) 
+{
+  similarity <- M / sqrt(rowSums(M * M))
+  similarity[is.na(similarity)] = 0
+  similarity <- similarity %*% t(similarity)
+  similarity <- as(similarity, "matrix")
+ 
+}   
+```
+
+
+Wir nutzen die Cosinus Similarity auf unsere regulären Daten
+```{r}
+cosinus_sim <- cosinus_similarity(oursample_Matrix)
+```
+
+
+## 6.4.2 Funktionsvergleich
+Wir vergleichen unsere Cosinus-Similarity Funktion mit denen aus recommenderlab auf unseren sample Datensatz.
+```{r}
+realRM <- as(oursample_Matrix, "realRatingMatrix")
+cosine_rec = as.matrix(similarity(realRM, method="cosine", which="users"))
+diag(cosine_rec) <- 1
+rescale <- function(x) { return(1/2*(x+1))}
+co_sim_rec = apply(cosinus_sim, 1, rescale)
+
+max(abs(cosine_rec - co_sim_rec),na.rm = TRUE)
+```
+
+REcommenderlab scalt die Matrix um. Also machen wir das auch damit wir überhaubt vergleichen können
+
+Wir überprüfen nun, ob unser cosinus recommender mit dem von recommenderlabs übereinstimmt.
+```{r}
+all.equal(cosine_rec, co_sim_rec)
+```
+Ja, macht er.
+
+Wir vergleichen nun noch unsere Implementierung mit der von dem package proxy
+
+
+```{r}
+library(proxy)
+
+# Cosine Similarity mit proxy
+proxy_cosine <- as(cosine(t(oursample_Matrix)), "matrix")
+
+# Vergleich
+max(abs(cosinus_sim - proxy_cosine))
+all.equal(cosinus_sim, proxy_cosine)
+```
+Wir sehen, auch dieser Vergleich mit proxy fällt positiv aus.
+
+## Vergleich unserer Funktionen
+
+```{r}
+max(abs(cosinus_sim - jaccard_sim), na.rm = TRUE)
+all.equal(cosinus_sim, jaccard_sim)
+```
+Mit einer mean relative difference von 0.6151852 sind sie nicht sehr ähnlich. Dies liegt daran,
+
+Visuallisieren der Funktionen:
+
+```{r}
+library(ggplot2)
+library(reshape2)
+
+# Daten für die Heatmap vorbereiten
+cosinus_melted <- melt(cosinus_sim)
+jaccard_melted <- melt(jaccard_sim)
+
+# Plotte cos Heatmap
+movie_labels <- rownames(cosinus_sim)
+
+# long format
+cos_sim_df <- as.data.frame(as.table(cosinus_sim))
+cos_sim_df$Var1 <- factor(cos_sim_df$Var1, levels = movie_labels)
+cos_sim_df$Var2 <- factor(cos_sim_df$Var2, levels = movie_labels)
+
+# heatmap
+ggplot(cos_sim_df, aes(Var1, Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(title = "Cosine Similarity Matrix", x = "Movies", y = "Movies")+
+  scale_x_discrete(labels = rep("", nrow(cos_sim_df))) +
+  scale_y_discrete(labels = rep("", nrow(cos_sim_df)))
+
+#jaccard heatmap
+ggplot() +
+  geom_tile(data = jaccard_melted, aes(x = Var1, y = Var2, fill = value)) +
+  labs(title = "Jaccard Similarity Matrix") +
+  theme_minimal()
+```
+
+```{r}
+
+```
+
+
+```{r}
+# Beispiel-Daten mit größeren Dimensionen
+set.seed(7)
+cosinus_sim_large <- matrix(runif(750^2), nrow = 750)
+
+# Melt-Funktion
+cosinus_melted_large <- melt(cosinus_sim_large)
+
+# Erstelle Heatmap mit angepassten Einstellungen
+ggplot(cosinus_melted_large, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_x_continuous(breaks = seq(1, 750, by = 50)) +
+  scale_y_continuous(breaks = seq(1, 750, by = 50)) +
+  labs(title = "Cosine Similarity Heatmap") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        legend.position = "right")
+```
+
+
+```{r}
+movie_labels <- rownames(cosinus_sim)
+
+# Create a long-format data frame for ggplot
+cos_sim_df <- as.data.frame(as.table(cosinus_sim))
+cos_sim_df$Var1 <- factor(cos_sim_df$Var1, levels = movie_labels)
+cos_sim_df$Var2 <- factor(cos_sim_df$Var2, levels = movie_labels)
+
+# Plot the heatmap
+ggplot(cos_sim_df, aes(Var1, Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(title = "Cosine Similarity Matrix", x = "Movies", y = "Movies")+
+  scale_x_discrete(labels = rep("", nrow(cos_sim_df))) +
+  scale_y_discrete(labels = rep("", nrow(cos_sim_df)))
+```
+
