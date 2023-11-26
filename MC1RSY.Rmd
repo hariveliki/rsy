@@ -797,3 +797,178 @@ ggplot(cos_sim_df, aes(Var1, Var2, fill = Freq)) +
   scale_y_discrete(labels = rep("", nrow(cos_sim_df)))
 ```
 
+# 6.5
+
+## Datensatz 400
+
+Wir erstellen sowohl cosinus IBCF als auch cosinus UBCF
+```{r}
+# IBCF 15 Empfehlungen
+recmod_ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine', k = 30))
+
+rec_ibcf_400 <- as(predict(recmod_ibcf_400, test_400, n =15), 'list')
+
+# UBCF 15 Empfehlungen
+recmod_ubcf_400 <- Recommender(train_400, method = 'UBCF', param = list(method = 'Cosine', nn = 30))
+
+rec_ubcf_400 <- as(predict(recmod_ubcf_400, train_400, n = 15), 'list')
+
+
+```
+
+
+```{r}
+recommended_400 <- data.frame(matrix(ncol = 17, nrow = 0))
+
+for (i in rec_ibcf_400) {
+  combined <- i
+  combined['rectype'] <- 'ibcf'
+  recommended_400 <-  rbind(recommended_400, combined)    #recommended mit ibcf und später ubcf
+  
+}
+
+# jetzt noch ubcf dazu
+for (i in rec_ubcf_400) {
+  combined <- i
+  combined['rectype'] <- 'ubcf'
+  recommended_400 <-  rbind(recommended_400, combined)  
+}
+
+colnames(recommended_400) <- c(0:14, 'rectype')
+
+#resultate wieder ins pivot-long format bringen
+recommended_400_long <- recommended_400 %>% pivot_longer(cols = 0:15) %>%
+  arrange(rectype, value)
+```
+
+Wir müssen nun die Movie Titel unique machen
+```{r}
+recommended_400_long$movie <- with(recommended_400_long, match(value, unique(value)))
+```
+
+wir teilen Item Based collaborative Filtering modell und 
+User Bsed Collaborative Filtering
+```{r}
+ibcf_400 <- recommended_400_long %>% filter(rectype == 'ibcf')
+ubcf_400 <- recommended_400_long %>% filter(rectype == 'ubcf')
+```
+
+Anzahl an unique Filmen bei unserem IBCF
+```{r}
+print('Das ist die Anzahl an unique Filmen in IBCF')
+print(length(unique(ibcf_400$value)))
+```
+## note to self: 
+Wie geht dies genau? Wir haben 700 filme im Datensatz. Das heisst, ein grosser Teil der Fime wird empfohlen
+
+```{r}
+ibcf_400
+```
+
+
+Anzahl an unique Filmen bei unserem UBCF
+```{r}
+print('Das ist die Anzahl an unique Filmen in UBCF')
+print(length(unique(ubcf_400$value)))
+```
+## kann hier noch etwas weiter analysieren. Z.B intersection
+
+## plots
+
+für 400 Data
+
+wir machen einen stacked plot
+```{r}
+ggplot(recommended_400_long, aes(x = movie)) + 
+  geom_histogram(bins = 400, aes(fill = rectype))
+```
+Wir können sehen, dass die meisten recommendations bei den meist recommendeted filmen von UBCF kommen. IBCF ist viel breiter verteilt.
+
+
+wir plotten die beiden Recommender getrennt
+```{r}
+ggplot(recommended_400_long) + 
+  aes(x =movie, fill = rectype) +
+  geom_histogram(bins = 600) + 
+  facet_grid(rectype ~ .) +
+  labs(x = 'Film ID', y = '#recommendations',
+       title = 'Recommendations: top_400_data') 
+```
+Wir können sehen, das es bei ubcf mehr filme gibt, welche sehr oft empfohlen wurden. Item based collaborative filtering hat wie wir zuvor gesehen haben, mehr einzigartige Filme, jedoch werden die Filme nie über 25 mal empfohlen, was man bei UBCF deutlich häufiger sieht.
+Dies liegt wohl daran, dass sich die USER ähnlicher sind als die ITEMS.
+
+
+## 6.5.2      3 Nutzer
+
+wir schauen, wie die Nutzerund Filme verteilt sind.
+```{r}
+movie_unique <- length(unique(recommended_400_long$movie))
+
+print('ANzahl an verschiedenen Filmen:')
+print(movie_unique)
+
+
+```
+
+
+
+ 3 Testnutzer
+```{r}
+ibcf_400
+```
+Zuvor, haben wir die Nutzer vernachlässigt. Wir können sowohl bei IBCF als auch bei UBCF  nicht sehen, von welchem User sie kommen. Das müssen wir ändern.
+
+```{r}
+recommended_400_long
+```
+
+wir nehmen einfach die ersten 3 als Vergleich, bei unserem alten recommender.
+```{r}
+rec_ibcf_400$'0'
+rec_ubcf_400$'0'
+```
+
+```{r}
+class(rec_ubcf_400$'0')
+```
+
+```{r}
+# Wähle die Top-15 Empfehlungen für die ersten drei Nutzer von IBCF
+ibcf_top15_user1 <- rec_ibcf_400$'0'[1:15]
+ibcf_top15_user2 <- rec_ibcf_400$'1'[1:15]
+ibcf_top15_user3 <- rec_ibcf_400$'2'[1:15]
+
+# Wähle die Top-15 Empfehlungen für die ersten drei Nutzer von UBCF
+ubcf_top15_user1 <- rec_ubcf_400$'0'[1:15]
+ubcf_top15_user2 <- rec_ubcf_400$'1'[1:15]
+ubcf_top15_user3 <- rec_ubcf_400$'2'[1:15]
+
+# Erstelle eine Vergleichstabelle
+comparison_table <- data.frame(
+   # Annahme: Die Zeilen repräsentieren die Top-15 Empfehlungen
+  IBCF_User1 = ibcf_top15_user1,
+  UBCF_User1 = ubcf_top15_user1,
+  IBCF_User2 = ibcf_top15_user2,
+  UBCF_User2 = ubcf_top15_user2,
+  IBCF_User3 = ibcf_top15_user3,
+  UBCF_User3 = ubcf_top15_user3
+)
+
+# Gib die Vergleichstabelle aus
+print(comparison_table)
+```
+
+Hier sind die gemeinsamen Filme
+```{r}
+print('für user 1: ')
+print(intersect(ibcf_top15_user1,ubcf_top15_user1))
+cat('\n')
+
+print('für user 2: ')
+print(intersect(ibcf_top15_user2,ubcf_top15_user2))
+cat('\n')
+
+print('für user 3: ')
+print(intersect(ibcf_top15_user3,ubcf_top15_user3))
+```
+Wir sehen, die Recommendations von IBCF und UBCF für unsere 3 User sind fast vollständig unterschiedlich.
