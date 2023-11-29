@@ -73,7 +73,7 @@ dfrat <- data.frame(
   movie = names(views_per_movie),
   views = views_per_movie
   )
-dfviews <- dfrat[order(dfviews$views, decreasing = TRUE), ]
+dfviews <- dfrat[order(dfrat$views, decreasing = TRUE), ]
 head(dfviews)
 ```
 here we have our 10 most watched movies as a plot
@@ -98,7 +98,7 @@ popular_genresdf <- MovieLenseMeta %>% select(-c('title', 'year', 'url'))
 # count the number of columns
 views_per_genre <- popular_genresdf %>%
   summarise(across(everything(), sum)) %>%
-  arrange(desc(views_per_genre))
+  arrange(desc(.))
 
 views_per_genre
 ```
@@ -811,7 +811,7 @@ rec_ibcf_400 <- as(predict(recmod_ibcf_400, test_400, n =15), 'list')
 # UBCF 15 Empfehlungen
 recmod_ubcf_400 <- Recommender(train_400, method = 'UBCF', param = list(method = 'Cosine', nn = 30))
 
-rec_ubcf_400 <- as(predict(recmod_ubcf_400, train_400, n = 15), 'list')
+rec_ubcf_400 <- as(predict(recmod_ubcf_400, test_400, n = 15), 'list') #note:  should it not be test 400? was prev train_400
 
 
 ```
@@ -971,4 +971,186 @@ cat('\n')
 print('für user 3: ')
 print(intersect(ibcf_top15_user3,ubcf_top15_user3))
 ```
-Wir sehen, die Recommendations von IBCF und UBCF für unsere 3 User sind fast vollständig unterschiedlich.
+Wir sehen, die Recommendations von IBCF und UBCF für unsere 3 User sind fast vollständig unterschiedlich. User 1 hat 1, user 2 hat 2 und user 3 hat keine gemeinsamen Filme.
+
+
+# 6.6
+
+Als Erinnerung, hier sind unsere Recommender aus Aufgabe 5
+```{r}
+# IBCF 15 Empfehlungen
+recmod_ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine', k = 30))
+
+rec_ibcf_400 <- as(predict(recmod_ibcf_400, test_400, n =15), 'list')
+
+# UBCF 15 Empfehlungen
+recmod_ubcf_400 <- Recommender(train_400, method = 'UBCF', param = list(method = 'Cosine', nn = 30))
+
+rec_ubcf_400 <- as(predict(recmod_ubcf_400, test_400, n = 15), 'list')
+```
+
+Nun können wir die Intersektion bon IBCF und UBCF für data_400 plotten.
+
+Ordinales Rating
+```{r}
+list_ord <- unlist(names(rec_ubcf_400) %>% map(~ (sum(rec_ibcf_400[[.x]] %in%
+                                                      rec_ubcf_400[[.x]]))/ 
+                     15 * 100))
+
+df_ord <- as.data.frame(list_ord)
+#df_ord
+```
+
+
+```{r}
+ggplot() + geom_histogram(data = df_ord, aes(list_ord), binwidth = 1) +
+  labs(title = 'Ordinal rating: Intersection IBCF/UBCF',
+       x = 'Intersection in %',
+       y = '#Users')
+```
+
+## noch nicht ganz fertig, weiss nicht ganz wie weiter
+```{r}
+
+```
+
+
+
+# 6.7
+Hier vergleichen wir IBCF vs SVD
+
+Wir benutzen dabei die selbe vorgehensweise, wie bei aufgabe 6
+
+```{r}
+n = 15
+
+#ibcf
+recmod_ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine', k = 30))
+
+rec_ibcf_400 <- as(predict(recmod_ibcf_400, test_400, n = n), 'list')
+
+
+
+#svd 10
+
+recmod_svd_400_10 <- Recommender(train_400, method = 'SVD', param = list(k = 10))
+rec_svd_400_10 <- as(predict(recmod_svd_400_10, test_400, n = n), 'list')
+
+
+
+
+#svd 20
+
+recmod_svd_400_20 <- Recommender(train_400, method = 'SVD', param = list(k = 20))
+rec_svd_400_20 <- as(predict(recmod_svd_400_20, test_400, n = n), 'list')
+
+
+
+# svd 30
+recmod_svd_400_30 <- Recommender(train_400, method = 'SVD', param = list(k = 30))
+rec_svd_400_30 <- as(predict(recmod_svd_400_30, test_400, n = n), 'list')
+
+
+# svd 40
+recmod_svd_400_40 <- Recommender(train_400, method = 'SVD', param = list(k = 40))
+rec_svd_400_40 <- as(predict(recmod_svd_400_40, test_400, n = n), 'list')
+
+
+# svd 50
+recmod_svd_400_50 <- Recommender(train_400, method = 'SVD', param = list(k = 50))
+rec_svd_400_50 <- as(predict(recmod_svd_400_50, test_400, n = n), 'list')
+```
+
+
+```{r}
+
+
+svd10reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_10[[.x]]))/ 15 * 100))            
+
+
+svd20reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
+  rec_ibcf_400[[.x]] %in%  rec_svd_400_20[[.x]]))/ 15 * 100)) 
+
+svd30reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
+  rec_ibcf_400[[.x]] %in%  rec_svd_400_30[[.x]]))/ 15 * 100))
+
+svd40reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
+  rec_ibcf_400[[.x]] %in%  rec_svd_400_40[[.x]]))/ 15 * 100))
+
+svd50reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
+  rec_ibcf_400[[.x]] %in%  rec_svd_400_50[[.x]]))/ 15 * 100))
+
+# dataframes
+df_svd_400_10 <- as.data.frame(svd10reclist)
+df_svd_400_20 <- as.data.frame(svd10reclist)
+df_svd_400_30 <- as.data.frame(svd10reclist)
+df_svd_400_40 <- as.data.frame(svd10reclist)
+df_svd_400_50 <- as.data.frame(svd10reclist)
+```
+
+```{r}
+#better version of above
+# Funktion für die Berechnung der Überschneidung
+calculate_overlap <- function(rec_ibcf, rec_svd, n) {
+  names(rec_ibcf) %>% map(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100)
+}
+
+# Berechnung der Überschneidung für verschiedene SVD-Konfigurationen
+svd10reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15)
+svd20reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15)
+svd30reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15)
+svd40reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15)
+svd50reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15)
+
+# Erstellung von DataFrames
+df_svd_400_10 <- as.data.frame(svd10reclist)
+df_svd_400_20 <- as.data.frame(svd20reclist)
+df_svd_400_30 <- as.data.frame(svd30reclist)
+df_svd_400_40 <- as.data.frame(svd40reclist)
+df_svd_400_50 <- as.data.frame(svd50reclist)
+
+```
+
+
+```{r}
+#einschub, sollte so funktionieren
+
+# Create a function to calculate overlap
+calculate_overlap <- function(rec_ibcf, rec_svd, n, model_name) {
+  data.frame(
+    val = names(rec_ibcf) %>% 
+      map_dbl(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100),
+    model = model_name
+  )
+}
+
+# Calculate overlap for different SVD configurations
+df_svd_400_10 <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15, 'SVD 10')
+df_svd_400_20 <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15, 'SVD 20')
+df_svd_400_30 <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15, 'SVD 30')
+df_svd_400_40 <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15, 'SVD 40')
+df_svd_400_50 <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15, 'SVD 50')
+
+# Bind the data frames together
+different_SVD <- bind_rows(
+  df_svd_400_10, df_svd_400_20, df_svd_400_30,
+  df_svd_400_40, df_svd_400_50
+)
+```
+
+Wir können an unserer Tabelle sehen, das bei der Intersektion sich zwischen den SVD Modellen sich nicht wirklich etwas verändert.
+```{r}
+different_SVD%>% group_by(model)%>%summarise(mean(val))
+```
+
+Nun plotten wir das ganze noch, um es visuell darzustellen.
+Es sieht bei allen ziemlich ähnlich aus. Es gibt fast keine Unterschiede.
+```{r}
+ggplot() + geom_histogram(data = different_SVD, aes(val, fill = model), binwidth = 1) +
+  facet_wrap(.~model) +
+  labs(x = 'Intersections in %',
+       y = '#Users',
+       title = 'Intersections of IBCF and various SVD')
+```
+
