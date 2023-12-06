@@ -1154,3 +1154,169 @@ ggplot() + geom_histogram(data = different_SVD, aes(val, fill = model), binwidth
        title = 'Intersections of IBCF and various SVD')
 ```
 
+# 6.8
+
+Wir erstellen eine coverage Funktion.
+
+Die Coverage-Funktion  misst, welchen Anteil der verfügbaren Elemente durch die Filme des Systems abgedeckt wird, und teilt sie durch die Menge aller Filme
+
+first we need the data
+```{r}
+#data <- movie_data
+```
+
+```{r}
+cover <- function(N, data, rectype) {
+  list_rec <- as(predict(rectype, data, n = N), 'list') #right prob
+  unl <- unlist(unlist(names(list_rec)) %>% map( ~(list_rec[[.x]])))
+  length <- length(unique(movie_data$item))
+  
+  length(unique(unl))/length
+  
+}
+```
+
+
+Jetzt machen wir die Novelty funktion:
+
+
+Die novelty Funktion berechnet die "Novelty" (Neuheit) eines Empfehlungssystems. Novelty misst, wie überraschend oder neu die Empfehlungen für einen Nutzer sind. 
+
+
+## second novelty try
+```{r}
+novelty <- function(N, data, rectype) {
+  rating_n <- nrow(merged_data %>% group_by(item) %>% count())
+  popularity <- merged_data %>% group_by(item) %>% count()
+  popularity$n <- popularity$n / rating_n
+  total <- list(0)
+  recomlist <- as(predict(rectype, data, n = N), "list")
+  
+  for (i in 1:nrow(data)) {
+    tmp <- merge(x = recomlist[[i]], y = popularity) %>% filter(x == item)
+    sum <- -sum(log2(tmp$n)) / N
+    total <- rbind(total, sum)
+  }
+  
+  Reduce("+", total) / length(recomlist)
+}
+
+
+```
+
+
+Plotten für data_400 mithilfe von IBCF
+
+Zuerst erstellen wir die Metriken.
+```{r}
+# ibcf_400 was defined earlier, so it commented out
+ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine',
+                                                                 k = 30))
+
+cvals400 <- c()
+nvals400 <- c()
+
+for (obs in seq(5, 30, 5)) {
+  cv <- cover(obs, test_400, ibcf_400)
+  nv <- novelty(obs, test_400, ibcf_400)
+  
+  #add it to list
+  cvals400 <- rbind(cvals400, cv)
+  nvals400 <- rbind(nvals400, nv)
+}
+
+```
+
+
+
+
+now we create the plot
+```{r}
+metrics <- cbind(as.data.frame(cvals400), as.data.frame(nvals400))
+
+colnames(metrics)[1] <- 'coverage'
+colnames(metrics)[2] <- 'Novelty'
+```
+
+
+```{r}
+metrics$xvalues <- c(5, 10, 15, 20, 25, 30)
+metrics
+```
+Wir plotten es.
+
+
+```{r}
+# Create a scatterplot with different colors for N values
+ggplot(metrics, aes(x = Novelty, y = coverage, color = factor(xvalues))) +
+  geom_point(size = 3) +
+  labs(title = "Scatterplot of Novelty vs Coverage",
+       x = "Novelty",
+       y = "Coverage",
+       color = "N Values") +
+  scale_color_manual(values = c("5" = "blue", "10" = "green", "15" = "red", "20" = "purple", "25" = "orange", "30" = "pink")) +
+  theme_minimal()
+```
+
+Wir sehen, wie novelty mit höhere Anzahl vorgeschlagener Filme ansteigt und dann wieder absinkt, und wir sehen, 
+dass die coverage stetig steigt.
+
+
+Nun machen wir noch dasselbe für svd
+
+```{r}
+ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine',
+                                                                 k = 30))
+svd_400 <- Recommender(train_400, method = 'SVD', param = list(k = 30))
+
+
+cvals400 <- c()
+nvals400 <- c()
+
+for (obs in seq(5, 30, 5)) {
+  cv <- cover(obs, test_400, svd_400)
+  nv <- novelty(obs, test_400, svd_400)
+  
+  #add it to list
+  cvals400 <- rbind(cvals400, cv)
+  nvals400 <- rbind(nvals400, nv)
+}
+
+
+smetrics <- cbind(as.data.frame(cvals400), as.data.frame(nvals400))
+
+colnames(smetrics)[1] <- 'coverage'
+colnames(smetrics)[2] <- 'Novelty'
+
+smetrics$xvalues <- c(5, 10, 15, 20, 25, 30)
+smetrics
+```
+
+Nun plotten wir die System-Metriken als Scatterplot “Novelty vs Coverage” für Top-N Listen der Länge N = 5,10, 15, 20, 25, 30 für truncated svd
+
+```{r}
+# Create a scatterplot with different colors for N values
+ggplot(smetrics, aes(x = Novelty, y = coverage, color = factor(xvalues))) +
+  geom_point(size = 3) +
+  labs(title = "Scatterplot of Novelty vs Coverage (SVD)",
+       x = "Novelty",
+       y = "Coverage",
+       color = "N Values") +
+  scale_color_manual(values = c("5" = "blue", "10" = "green", "15" = "red", "20" = "purple", "25" = "orange", "30" = "pink")) +
+  theme_minimal()
+```
+
+Hier sehen wir, dass sowohl Novelty als auch Coverage mit mehr Empfehlungen stetig zunehmen, anders als bei IBCF
+
+## tbd nun für data_600
+
+```{r}
+
+```
+
+# 6.9
+
+```{r}
+
+```
+
