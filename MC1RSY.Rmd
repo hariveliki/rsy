@@ -1314,9 +1314,146 @@ Hier sehen wir, dass sowohl Novelty als auch Coverage mit mehr Empfehlungen stet
 
 ```
 
-# 6.9
 
+
+# 6.9 new try
+Als erstes bestimmen wir unser good Rating
+
+Wir suchen ein ausgewogenes Verhältnis zwischen "guten" und "schlechten" Ratings wünschst und eine ähnliche Sensitivität und Spezifität.
+Deswegen wählen wir 0.5 als quantil
+Dies ist unser good Rating.
 ```{r}
-
+gR <- quantile(merged_data$rating, 0.5)
+gR
 ```
 
+## Modellwahlen
+wir benutzen die Modelle
+SVD
+IBCF cos
+UBCF cos
+IBCF Pearson
+UBCF Pearson
+
+Erklärung:
+
+Warum benutzen wir die Modelle?
+
+SVD (Singular Value Decomposition): SVD ist eine weit verbreitete Matrixfaktorisierungstechnik, die gut auf latente Faktoren in den Daten reagiert. Es ist bekannt für seine gute Leistung bei der Entdeckung von Muster in großen Datensätzen.
+
+IBCF (Item-Based Collaborative Filtering) mit Cosine-Ähnlichkeit: IBCF basiert auf der Ähnlichkeit zwischen Elementen und eignet sich gut für Datensätze mit klaren Elementähnlichkeiten. Cosine-Ähnlichkeit ist eine einfache und effektive Methode, um die Ähnlichkeit zwischen Elementen zu messen.
+
+UBCF (User-Based Collaborative Filtering) mit Cosine-Ähnlichkeit: UBCF betrachtet die Ähnlichkeit zwischen Benutzern. Cosine-Ähnlichkeit wird auch hier verwendet, um die Ähnlichkeit zwischen Benutzerprofilen zu berechnen.
+
+IBCF mit Pearson-Ähnlichkeit: Statt Cosine-Ähnlichkeit kann auch Pearson-Ähnlichkeit für IBCF verwendet werden. Pearson-Ähnlichkeit berücksichtigt die Zentrierung der Daten und kann in bestimmten Szenarien bevorzugt werden.
+
+UBCF mit Pearson-Ähnlichkeit: Analog zu IBCF, aber für Benutzer statt Elemente.
+
+
+
+```{r}
+top_400_scheme <- evaluationScheme(rrm_400, goodRating = gR,
+                                   method = 'cross-validation',
+                                   k = 10, given = 20)
+
+approaches <- list('Popular movies' = list(name = 'POPULAR', param = NULL),
+                   'SVD' = list(name = 'SVD', param = list(k = 10)),
+                   'IBCF cosinus' = list(name = 'IBCF', 
+                                         param = list(method ='Cosine', k = 10)),
+                   'IBCF Pearson' = list(name = 'IBCF', 
+                                          param = list(method ='Pearson', k = 10)),
+                   'UBCF cosinus' = list(name = 'UBCF', 
+                                          param = list(method ='Cosine', k = 10)),
+                   'UBCF Pearson' = list(name = 'UBCF', 
+                                          param = list(method ='Pearson', k = 10))
+)
+
+steps <- c(10,15,20,25,30)
+```
+
+Jetzt plotten wir die 5 Modelle für data_400
+
+Als Metriken benutzen wir True Positive Rate (TPR) und False Positive Rate (FPR:
+
+True Positive Rate (TPR):
+Anteil der tatsächlichen positiven Instanzen, die vom Modell korrekt als positiv vorhergesagt wurden.
+  Formel: TPR = TP / (TP + FN)
+  TP (True Positive): Anzahl der korrekt als positiv vorhergesagten Instanzen.
+  FN (False Negative): Anzahl der falsch als negativ vorhergesagten Instanzen.
+  
+  
+False Positive Rate (FPR):
+FPR ist der Anteil der tatsächlich negativen Instanzen, die vom Modell fälschlicherweise als positiv vorhergesagt wurden.
+  Formel: FPR = FP / (FP + TN)
+  FP (False Positive): Anzahl der falsch als positiv vorhergesagten Instanzen.
+  TN (True Negative): Anzahl der korrekt als negativ vorhergesagten Instanzen.
+```{r}
+comparemod400 <- evaluate(top_400_scheme, approaches,n = steps, type = 'topNList',
+                          progress = FALSE)
+
+plot(comparemod400,  avg = TRUE, lty = 1, annotate = 1, legend = 'topleft')
+```
+
+Unser SVD Modell ist klar das beste Modell. Doch vielleicht lässt sich das SVD Modell
+noch mithilfe von Hyperparameter optimieren.
+
+Der Standardwert von gamna is 0.015
+Der Standardwert von lambda ist 0.001(https://rdrr.io/cran/recommenderlab/src/R/RECOM_SVDF.R)
+
+Der Standardwert von lambda ist 0.001
+
+## 6.9.4 Hyperparameter
+Experimentieren mit gamna:
+```{r}
+top_400_scheme <- evaluationScheme(rrm_400, goodRating = gR,
+                                   method = 'cross-validation',
+                                   k = 10, given = 20)
+approaches <- list('Popular movies' = list(name = 'POPULAR', param = NULL),
+                   'SVD gamma 0.005' = list(name = 'SVD', 
+                                           param = list(k = 10, gamma = 0.005)),
+                   'SVD gamma 0.010' = list(name = 'SVD', 
+                                           param = list(k = 10, gamma = 0.010)),
+                   'SVD gamma def(0.015)' = list(name = 'SVD', 
+                                                param = list(k = 10, gamma = 0.015)),
+                   'SVD gamma 0.020' = list(name = 'SVD', 
+                                           param = list(k = 10, gamma = 0.020)),
+                   'SVD gamma 0.025' = list(name = 'SVD', 
+                                           param = list(k = 10, gamma = 0.025)),
+                   'SVD gamma 0.5' = list(name = 'SVD',
+                                          param = list(k = 10, gamma = 0.5))
+)
+
+comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = 'topNList',progress = FALSE)
+
+plot(comparemod400,  avg = TRUE, lty = 1, annotate = 1, legend = 'topleft')
+```
+Alle gamma scheinen aufeinander zu liegen. Der hyperparameter gamma scheint nicht wichtig zu sein.
+
+
+Experimentieren mit lambda:
+```{r}
+top_400_scheme <- evaluationScheme(rrm_400, goodRating = gR,
+                                   method = 'cross-validation',
+                                   k = 10, given = 20)
+
+approaches <- list('Popular movies' = list(name = 'POPULAR', param = NULL),
+                   'SVD lambda 0.0001' = list(name = 'SVD', 
+                                           param = list(k = 10, lambda = 0.0001)),
+                   'SVD lambda def(0.001)' = list(name = 'SVD', 
+                                           param = list(k = 10, lambda = 0.001)),
+                   'SVD lambda 0.002' = list(name = 'SVD', 
+                                                param = list(k = 10, lambda = 0.002)),
+                   'SVD lambda 0.005' = list(name = 'SVD', 
+                                           param = list(k = 10, lambda = 0.005)),
+                   'SVD lambda 0.01' = list(name = 'SVD', 
+                                           param = list(k = 10, lambda = 0.01)),
+                   'SVD lambda 0.02' = list(name = 'SVD',
+                                          param = list(k = 10, lambda = 0.02))
+)
+
+comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = 'topNList',progress = FALSE)
+
+plot(comparemod400,  avg = TRUE, lty = 1, annotate = 1, legend = 'topleft')
+```
+
+Wir sehen wieder keinen Unterschied, egal wie sehr wir die Parameter anpassen.
