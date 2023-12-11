@@ -903,7 +903,6 @@ for (given in given_values) {
     ggtitle(paste("Top 10 Most Frequent Movies in Similarity Matrix for given =", given)) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
   print(p)
-  ggsave(paste("similarity_matrix_given_", given, ".png", sep = ""))
 }
 ```
 
@@ -1286,7 +1285,7 @@ compareModels <- function(ibcf, ubcf) {
   print(paste("Recommendations UBCF:", nrow(ubcf)))
 
   intersect_ <- intersect(ibcf$Movie, ubcf$Movie)
-  
+
   print(paste("Similar recommendations:", length(intersect_)))
   print(paste("Proportion IBCF:", length(intersect_) / nrow(ibcf) * 100))
   print(paste("Proportion UBCF:", length(intersect_) / nrow(ubcf) * 100))
@@ -1297,7 +1296,6 @@ compareModels(ibcfTopNdataFrame, ubcfTopNdataFrame)
 ```
 
 ```{r}
-set.seed(42)
 matrixReduced2 <- as(dataFrame2, "realRatingMatrix")
 evaluationScheme2 <- evaluationScheme(matrixReduced2, method = "split", train = 0.8, given = 5, goodRating = 4)
 trainSet2 <- getData(evaluationScheme2, "train")
@@ -1313,10 +1311,10 @@ ubcf2
 ```
 
 ```{r}
-ibcfTopNList2 <- predict(ibcf, testSet, n = 15)
+ibcfTopNList2 <- predict(ibcf2, testSet2, n = 15)
 ibcfTopNList2
 
-ubcfTopNList2 <- predict(ubcf, testSet, n = 15)
+ubcfTopNList2 <- predict(ubcf2, testSet2, n = 15)
 ubcfTopNList2
 ```
 
@@ -1346,7 +1344,7 @@ compareModels <- function(ibcf, ubcf) {
   print(paste("Recommendations UBCF:", nrow(ubcf)))
 
   intersect_ <- intersect(ibcf$Movie, ubcf$Movie)
-  
+
   print(paste("Similar recommendations:", length(intersect_)))
   print(paste("Proportion IBCF:", length(intersect_) / nrow(ibcf) * 100))
   print(paste("Proportion UBCF:", length(intersect_) / nrow(ubcf) * 100))
@@ -1356,16 +1354,16 @@ print("First Reduction without Normalization")
 compareModels(ibcfTopNdataFrame2, ubcfTopNdataFrame2)
 ```
 First Reduction Set:
-IBCF recommends 380 movies.
-UBCF recommends 218 movies.
-The intersect between both recommenders for the first reduced dataset is 119 movies.
-The relative intersect for IBCF is 31% and for UBCF it is 55%.
+IBCF recommends 398 movies.
+UBCF recommends 231 movies.
+The intersect between both recommenders for the first reduced dataset is 144 movies.
+The relative intersect for IBCF is 36% and for UBCF it is 62%.
 
 Second Reduction Set:
-IBCF recommends 380 movies.
-UBCF recommends 218 movies.
-The intersect between both recommenders for the first reduced dataset is 119 movies.
-The relative intersect for IBCF is 31% and for UBCF it is 55%.
+IBCF recommends 363 movies.
+UBCF recommends 236 movies.
+The intersect between both recommenders for the first reduced dataset is 112 movies.
+The relative intersect for IBCF is 31% and for UBCF it is 47%.
 #TODO
 We see that the intersect is lower than before because we have fewer user ratings to work with.
 
@@ -1380,7 +1378,7 @@ The different focus can lead to different sets of recommendations.
 ```{r}
 dataFrame1Norm <- dataFrame1
 dataFrame1Norm$rating <- scale(dataFrame1$rating)
-# test that the ratings have mean 0 and sd 1
+
 test_that("ratings have mean 0 and sd 1", {
   expect_equal(mean(dataFrame1Norm$rating), 0)
   expect_equal(sd(dataFrame1Norm$rating), 1)
@@ -1388,7 +1386,6 @@ test_that("ratings have mean 0 and sd 1", {
 ```
 
 ```{r}
-set.seed(42)
 matrixReduced1Norm <- as(dataFrame1Norm, "realRatingMatrix")
 evaluationScheme <- evaluationScheme(matrixReduced1Norm, method = "split", train = 0.8, given = 5, goodRating = 4)
 trainSetNorm <- getData(evaluationScheme, "train")
@@ -1396,29 +1393,28 @@ testSetNorm <- getData(evaluationScheme, "known")
 ```
 
 ```{r}
-ibcfNorm <- Recommender(trainSet, "IBCF", param=list(k= 30, method = "cosine"))
+ibcfNorm <- Recommender(trainSet, "IBCF", param = list(k = 30, method = "cosine"))
 ibcfNorm
 
-ubcfNorm <- Recommender(testSet, "UBCF", param=list(nn= 30, method = "cosine"))
+ubcfNorm <- Recommender(testSet, "UBCF", param = list(nn = 30, method = "cosine"))
 ubcfNorm
 ```
 
 ```{r}
-ibcfTopNListNorm <- predict(ibcfNorm, testSetNorm, n=15)
+ibcfTopNListNorm <- predict(ibcfNorm, testSetNorm, n = 15)
 ibcfTopNListNorm
 
-ubcfTopNListNorm <- predict(ubcfNorm, testSetNorm, n=15)
+ubcfTopNListNorm <- predict(ubcfNorm, testSetNorm, n = 15)
 ubcfTopNListNorm
 ```
 
 ```{r}
-
-getTopNdataFrame <- function(topNList){
+getTopNdataFrame <- function(topNList) {
   counts <- table(unlist(as.array(as(topNList, "list"))))
   df <- data.frame(Movie = names(counts), Count = unname(counts)) %>%
     select("Movie", "Count.Freq") %>%
     rename("Count" = "Count.Freq") %>%
-    arrange(desc(Count))  
+    arrange(desc(Count))
   df
 }
 
@@ -1446,56 +1442,49 @@ compareModels <- function(ibcf, ubcf) {
 print("First Reduction with Normalization")
 compareModels(ibcfTopNdataFrameNorm, ubcfTopNdataFrameNorm)
 ```
-IBCF with normalized data recommends 366 movies.
-UBCF with normalized data recommends 211 movies.
-The intersect between both recommenders for the first reduced dataset (normalized) is 117 movies.
-The relative intersect for IBCF is 33% and for UBCF it is 58%.
-The results are similar as without normalized ratings.
-But we get a small increase in similar recommendations, due to normalizing.
-Normalized ratings make the recommendations more similar.
-WHY?
+IBCF with normalized data recommends 389 films.
+UBCF with normalized data recommends 205 films.
+The intersection between the two recommenders for the first reduced data set (normalized) is 122 films.
+The relative intersection for IBCF is 32% and for UBCF 59%.
+The results are similar to those without normalized ratings.
+The UBCF recommendations are lower than before because they include people with the same taste in movies
+and different rating strengths (4 might be a very good rating for some people and not for others).
+Normalized ratings make the recommendations more similar because we group users together.
 
+# 6.7 Analyse Top-N Listen - IBCF vs SVD [8 Punkte]
+Aufgabe 7: Vergleiche Memory-based und Modell-based Recommenders bezüglich Überschneidung der Top-N Empfehlungen
+für den reduzierten Datensatz, analog zur vorangehenden Aufgabe. Vergleiche wie sich der Anteil übereinstimmender
+Empfehlungen der Top-15 Liste verändert für
 
+1. IBCF (Cosine Similarity, 30 Nachbarn, ordinale Ratings) vs Truncated SVD Modelle mit Variation der Anzahl Singulärwerte
 
-# 6.7
-Hier vergleichen wir IBCF vs SVD
-
-Wir benutzen dabei die selbe vorgehensweise, wie bei aufgabe 6
+Hinweise:
+• Diese Aufgabe ist eine Fortsetzung von Aufgabe 6.
+• Gefordert ist eine vergleichende, statistische Analyse inklusive Visualisierung.
+• Die Anzahl Singulärwert ist zu variieren von 10 auf 20, 30, 40, und 50
 
 ```{r}
 n <- 15
 
 # ibcf
 recmod_ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(method = "Cosine", k = 30))
-
 rec_ibcf_400 <- as(predict(recmod_ibcf_400, testData1, n = n), "list")
 
-
-
 # svd 10
-
 recmod_svd_400_10 <- Recommender(trainData1, method = "SVD", param = list(k = 10))
 rec_svd_400_10 <- as(predict(recmod_svd_400_10, testData1, n = n), "list")
 
-
-
-
 # svd 20
-
 recmod_svd_400_20 <- Recommender(trainData1, method = "SVD", param = list(k = 20))
 rec_svd_400_20 <- as(predict(recmod_svd_400_20, testData1, n = n), "list")
-
-
 
 # svd 30
 recmod_svd_400_30 <- Recommender(trainData1, method = "SVD", param = list(k = 30))
 rec_svd_400_30 <- as(predict(recmod_svd_400_30, testData1, n = n), "list")
 
-
 # svd 40
 recmod_svd_400_40 <- Recommender(trainData1, method = "SVD", param = list(k = 40))
 rec_svd_400_40 <- as(predict(recmod_svd_400_40, testData1, n = n), "list")
-
 
 # svd 50
 recmod_svd_400_50 <- Recommender(trainData1, method = "SVD", param = list(k = 50))
@@ -1504,7 +1493,7 @@ rec_svd_400_50 <- as(predict(recmod_svd_400_50, testData1, n = n), "list")
 
 
 ```{r}
-svd10reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+**svd10reclist** <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
   rec_ibcf_400[[.x]] %in% rec_svd_400_10[[.x]]
 )) / 15 * 100))
 
@@ -1534,25 +1523,25 @@ df_svd_400_50 <- as.data.frame(svd10reclist)
 ```
 
 ```{r}
-# better version of above
-# Funktion für die Berechnung der Überschneidung
-calculate_overlap <- function(rec_ibcf, rec_svd, n) {
-  names(rec_ibcf) %>% map(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100)
-}
+# # better version of above
+# # Funktion für die Berechnung der Überschneidung
+# calculate_overlap <- function(rec_ibcf, rec_svd, n) {
+#   names(rec_ibcf) %>% map(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100)
+# }
 
-# Berechnung der Überschneidung für verschiedene SVD-Konfigurationen
-svd10reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15)
-svd20reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15)
-svd30reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15)
-svd40reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15)
-svd50reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15)
+# # Berechnung der Überschneidung für verschiedene SVD-Konfigurationen
+# svd10reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15)
+# svd20reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15)
+# svd30reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15)
+# svd40reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15)
+# svd50reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15)
 
-# Erstellung von DataFrames
-df_svd_400_10 <- as.data.frame(svd10reclist)
-df_svd_400_20 <- as.data.frame(svd20reclist)
-df_svd_400_30 <- as.data.frame(svd30reclist)
-df_svd_400_40 <- as.data.frame(svd40reclist)
-df_svd_400_50 <- as.data.frame(svd50reclist)
+# # Erstellung von DataFrames
+# df_svd_400_10 <- as.data.frame(svd10reclist)
+# df_svd_400_20 <- as.data.frame(svd20reclist)
+# df_svd_400_30 <- as.data.frame(svd30reclist)
+# df_svd_400_40 <- as.data.frame(svd40reclist)
+# df_svd_400_50 <- as.data.frame(svd50reclist)
 ```
 
 
@@ -1601,257 +1590,193 @@ ggplot() +
     title = "Intersections of IBCF and various SVD"
   )
 ```
+We calculate svd models with different singular values and make a prediction.
+Then we compare the prediction with an ibcf model.
+We see that the highest overlap value is 0%, then around 8% and then it decreases further.
+This means that for most users there is less or no overlap between the IBCF and SVD models.
 
-# 6.8
+SVD reduces the dimensionality of the data by identifying latent features that may not be directly interpretable.
+These latent features represent underlying patterns in the data that are not necessarily related to the explicit
+item similarities that IBCF uses.
+IBCF directly computes similarities between items based on user ratings, without considering latent features.
+If these latent features do not align with the direct item-item ratings similarity, 
+the recommendations from SVD and IBCF will diverge.
 
-Wir erstellen eine coverage Funktion.
+# 6.8 Implementierung Top-N Metriken [16 Punkte]
 
-Die Coverage-Funktion  misst, welchen Anteil der verfügbaren Elemente durch die Filme des Systems abgedeckt wird, und teilt sie durch die Menge aller Filme
+8. Implementiere Funktionen, um aus den Top-N Listen aller Nutzer*innen die Item-space
+Coverage@N und Novelty@N eines Recommenders zu beurteilen.
+Visualisiere diese System-Metriken als Scatterplot “Novelty vs Coverage” für Top-N Listen der Länge N = 5,
+10, 15, 20, 25, 30 mit
+1. IBCF (Cosine Similarity, 30 Nachbarn)
 
-first we need the data
+Hinweise:
+• Diese Aufgabe dient dazu die zentrale Frage der Evaluierung von Recommender Systemen zu vertiefen und dient als Input für die Entscheidung von Aufgabe 9.
+• Die eigene Implementierung ist sinnvoll zu testen und zu dokumentieren
+
 ```{r}
-# data <- movie_data
-```
-
-```{r}
-cover <- function(N, data, rectype) {
-  list_rec <- as(predict(rectype, data, n = N), "list") # right prob
-  unl <- unlist(unlist(names(list_rec)) %>% map(~ (list_rec[[.x]])))
-  length <- length(unique(movie_data$item))
-
-  length(unique(unl)) / length
+coverageN <- function(dataset, model, n) {
+  model <- Recommender(dataset, model, param = list(k = n, method = "cosine"))
+  topN <- predict(model, dataset, n = 15)
+  listItems <- unique(
+    unlist(
+      as(topN, "list"),
+      use.names = FALSE
+    )
+  )
+  coverageN <- length(listItems) / nrow(dataset) * 100
+  return(coverageN)
 }
 ```
 
-
-Jetzt machen wir die Novelty funktion:
-
-
-Die novelty Funktion berechnet die "Novelty" (Neuheit) eines Empfehlungssystems. Novelty misst, wie überraschend oder neu die Empfehlungen für einen Nutzer sind. 
-
-
-## second novelty try
 ```{r}
-novelty <- function(N, data, rectype) {
-  rating_n <- nrow(merged_data %>% group_by(item) %>% count())
-  popularity <- merged_data %>%
-    group_by(item) %>%
-    count()
-  popularity$n <- popularity$n / rating_n
-  total <- list(0)
-  recomlist <- as(predict(rectype, data, n = N), "list")
+data(MovieLense)
+coverageN(MovieLense, "IBCF", 15)
+```
 
-  for (i in 1:nrow(data)) {
-    tmp <- merge(x = recomlist[[i]], y = popularity) %>% filter(x == item)
-    sum <- -sum(log2(tmp$n)) / N
-    total <- rbind(total, sum)
-  }
+```{r}
+nValues <- c(5, 10, 15, 20, 25, 30)
+coverage_values <- c()
 
-  Reduce("+", total) / length(recomlist)
+for (n in nValues) {
+  coverage <- coverageN(MovieLense, "IBCF", n)
+  coverage_values <- c(coverage_values, coverage)
+  print(paste("Coverage for n =", n, round(coverage, 4)))
+}
+```
+If we recommend 5 items to each user, the model recommends about 58 percent of all movies,
+whereas 42 percent of all movies are never recommended.
+On the other hand, if we recommend 30 movies to each user, the model recommends about 74 percent
+of all movies, while 26 percent of all movies are never recommended.
+This is because the more movies we recommend, the more obscure movies will be recommended.
+
+2. Truncated SDV (30 Singulärwerte).
+
+```{r}
+library(recommenderlab)
+library(ggplot2)
+
+coverage_at_n <- function(recommender, data, N) {
+  all_items <- unique(colnames(data))
+  top_n_items <- unique(unlist(getTopN(recommender, data, n = N)))
+  return(length(top_n_items) / length(all_items))
+}
+
+novelty_at_n <- function(recommender, data, N) {
+  top_n_recommendations <- getTopN(recommender, data, n = N)
+  novelty_scores <- unlist(lapply(top_n_recommendations, function(x) mean(item_popularity[unlist(x)])))
+  return(mean(novelty_scores))
+}
+
+item_popularity <- rowSums(MovieLense)
+
+# Calculate metrics for different N values
+N_values <- c(5, 10, 15, 20, 25, 30)
+metrics <- data.frame(N = N_values, Coverage_IBCF = NA, Novelty_IBCF = NA, Coverage_SVD = NA, Novelty_SVD = NA)
+ibcf_recommender <- Recommender(MovieLense, method = "IBCF", param = list(k = 30, method = "Cosine"))
+svd_recommender <- Recommender(MovieLense, method = "SVD", param = list(k = 30))
+
+for (N in N_values) {
+  metrics[metrics$N == N, "Coverage_IBCF"] <- coverage_at_n(ibcf_recommender, MovieLense, N)
+  metrics[metrics$N == N, "Novelty_IBCF"] <- novelty_at_n(ibcf_recommender, MovieLense, N)
+  metrics[metrics$N == N, "Coverage_SVD"] <- coverage_at_n(svd_recommender, MovieLense, N)
+  metrics[metrics$N == N, "Novelty_SVD"] <- novelty_at_n(svd_recommender, MovieLense, N)
 }
 ```
 
+Coverage Increases with N, for both IBCF and SVD.
+This is expected since a larger N allows the recommender to cover more items from the item space.
+Trade-off between Novelty and Coverage is plot, which says that a good recommender system 
+should ideally have high Coverage (suggesting it can recommend a diverse set of items)
+and high Novelty (indicating it can suggest new or less-known items).
 
-Plotten für data_400 mithilfe von IBCF
+# 6.9 Wahl des optimalen Recommenders [20 Punkte]
+Aufgabe 9: Bestimme aus 5 unterschiedlichen Modellen das für Top-N Empfehlungen “beste” Modell und
+verwende zusätzlich einen Top-Movie Recommender.
+1. Verwende für die Evaluierung 10-fache Kreuzvalidierung,
+2. Begründe deine Wahl von Metriken und Modell,
+3. Analysiere das “beste” Modell für Top-N Recommendations mit N = 10, 15, 20, 25 und 30,
+4. Optimiere das “beste” Modell hinsichtlich Hyperparametern.
 
-Zuerst erstellen wir die Metriken.
-```{r}
-# ibcf_400 was defined earlier, so it commented out
-ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(
-  method = "Cosine",
-  k = 30
-))
-
-cvals400 <- c()
-nvals400 <- c()
-
-for (obs in seq(5, 30, 5)) {
-  cv <- cover(obs, testData1, ibcf_400)
-  nv <- novelty(obs, testData1, ibcf_400)
-
-  # add it to list
-  cvals400 <- rbind(cvals400, cv)
-  nvals400 <- rbind(nvals400, nv)
-}
-```
-
-
-
-
-now we create the plot
-```{r}
-metrics <- cbind(as.data.frame(cvals400), as.data.frame(nvals400))
-
-colnames(metrics)[1] <- "coverage"
-colnames(metrics)[2] <- "Novelty"
-```
-
-
-```{r}
-metrics$xvalues <- c(5, 10, 15, 20, 25, 30)
-metrics
-```
-Wir plotten es.
-
-
-```{r}
-# Create a scatterplot with different colors for N values
-ggplot(metrics, aes(x = Novelty, y = coverage, color = factor(xvalues))) +
-  geom_point(size = 3) +
-  labs(
-    title = "Scatterplot of Novelty vs Coverage",
-    x = "Novelty",
-    y = "Coverage",
-    color = "N Values"
-  ) +
-  scale_color_manual(values = c("5" = "blue", "10" = "green", "15" = "red", "20" = "purple", "25" = "orange", "30" = "pink")) +
-  theme_minimal()
-```
-
-Wir sehen, wie novelty mit höhere Anzahl vorgeschlagener Filme ansteigt und dann wieder absinkt, und wir sehen, 
-dass die coverage stetig steigt.
-
-
-Nun machen wir noch dasselbe für svd
-
-```{r}
-ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(
-  method = "Cosine",
-  k = 30
-))
-svd_400 <- Recommender(trainData1, method = "SVD", param = list(k = 30))
-
-
-cvals400 <- c()
-nvals400 <- c()
-
-for (obs in seq(5, 30, 5)) {
-  cv <- cover(obs, testData1, svd_400)
-  nv <- novelty(obs, testData1, svd_400)
-
-  # add it to list
-  cvals400 <- rbind(cvals400, cv)
-  nvals400 <- rbind(nvals400, nv)
-}
-
-
-smetrics <- cbind(as.data.frame(cvals400), as.data.frame(nvals400))
-
-colnames(smetrics)[1] <- "coverage"
-colnames(smetrics)[2] <- "Novelty"
-
-smetrics$xvalues <- c(5, 10, 15, 20, 25, 30)
-smetrics
-```
-
-Nun plotten wir die System-Metriken als Scatterplot “Novelty vs Coverage” für Top-N Listen der Länge N = 5,10, 15, 20, 25, 30 für truncated svd
-
-```{r}
-# Create a scatterplot with different colors for N values
-ggplot(smetrics, aes(x = Novelty, y = coverage, color = factor(xvalues))) +
-  geom_point(size = 3) +
-  labs(
-    title = "Scatterplot of Novelty vs Coverage (SVD)",
-    x = "Novelty",
-    y = "Coverage",
-    color = "N Values"
-  ) +
-  scale_color_manual(values = c("5" = "blue", "10" = "green", "15" = "red", "20" = "purple", "25" = "orange", "30" = "pink")) +
-  theme_minimal()
-```
-
-Hier sehen wir, dass sowohl Novelty als auch Coverage mit mehr Empfehlungen stetig zunehmen, anders als bei IBCF
-
-## tbd nun für data_600
-
-```{r}
-
-```
-
-
-
-# 6.9 new try
-Als erstes bestimmen wir unser good Rating
-
-Wir suchen ein ausgewogenes Verhältnis zwischen "guten" und "schlechten" Ratings wünschst und eine ähnliche Sensitivität und Spezifität.
-Deswegen wählen wir 0.5 als quantil
-Dies ist unser good Rating.
+First, we determine our good rating.
+We are looking for a balanced ratio between "good" and "bad" ratings and a similar sensitivity and specificity.
+We therefore choose 0.5 as the quantile.
+This is our good rating.
 ```{r}
 gR <- quantile(merged_data$rating, 0.5)
 gR
 ```
 
-## Modellwahlen
-wir benutzen die Modelle
+We choose this models:
 SVD
-IBCF cos
-UBCF cos
+IBCF cosine
+UBCF cosine
 IBCF Pearson
 UBCF Pearson
 
-Erklärung:
+Explanation:
 
-Warum benutzen wir die Modelle?
+Why do we use the models?
 
-SVD (Singular Value Decomposition): SVD ist eine weit verbreitete Matrixfaktorisierungstechnik, die gut auf latente Faktoren in den Daten reagiert. Es ist bekannt für seine gute Leistung bei der Entdeckung von Muster in großen Datensätzen.
+SVD (Singular Value Decomposition): SVD is a widely used matrix factorization technique that responds well to latent factors in the data. It is known for its good performance in discovering patterns in large data sets.
 
-IBCF (Item-Based Collaborative Filtering) mit Cosine-Ähnlichkeit: IBCF basiert auf der Ähnlichkeit zwischen Elementen und eignet sich gut für Datensätze mit klaren Elementähnlichkeiten. Cosine-Ähnlichkeit ist eine einfache und effektive Methode, um die Ähnlichkeit zwischen Elementen zu messen.
+IBCF (Item-Based Collaborative Filtering) with Cosine Similarity: IBCF is based on similarity between items and is well suited for datasets with clear item similarities. Cosine similarity is a simple and effective method to measure the similarity between items.
 
-UBCF (User-Based Collaborative Filtering) mit Cosine-Ähnlichkeit: UBCF betrachtet die Ähnlichkeit zwischen Benutzern. Cosine-Ähnlichkeit wird auch hier verwendet, um die Ähnlichkeit zwischen Benutzerprofilen zu berechnen.
+UBCF (User-Based Collaborative Filtering) with Cosine similarity: UBCF looks at the similarity between users. Cosine similarity is also used here to calculate the similarity between user profiles.
 
-IBCF mit Pearson-Ähnlichkeit: Statt Cosine-Ähnlichkeit kann auch Pearson-Ähnlichkeit für IBCF verwendet werden. Pearson-Ähnlichkeit berücksichtigt die Zentrierung der Daten und kann in bestimmten Szenarien bevorzugt werden.
+IBCF with Pearson similarity: Pearson similarity can also be used for IBCF instead of Cosine similarity. Pearson similarity takes into account the centering of the data and may be preferred in certain scenarios.
 
-UBCF mit Pearson-Ähnlichkeit: Analog zu IBCF, aber für Benutzer statt Elemente.
-
-
+UBCF with Pearson similarity: Analogous to IBCF, but for users instead of elements.
 
 ```{r}
-top_400_scheme <- evaluationScheme(rrm_400,
+top_400_scheme <- evaluationScheme(
+  matrixReduced1,
   goodRating = gR,
   method = "cross-validation",
-  k = 10, given = 20
+  k = 10,
+  given = 20
 )
 
 approaches <- list(
   "Popular movies" = list(name = "POPULAR", param = NULL),
-  "SVD" = list(name = "SVD", param = list(k = 10)),
+  "SVD" = list(name = "SVD", param = list(k = 30)),
   "IBCF cosinus" = list(
     name = "IBCF",
-    param = list(method = "Cosine", k = 10)
+    param = list(method = "Cosine", k = 30)
   ),
   "IBCF Pearson" = list(
     name = "IBCF",
-    param = list(method = "Pearson", k = 10)
+    param = list(method = "Pearson", k = 30)
   ),
   "UBCF cosinus" = list(
     name = "UBCF",
-    param = list(method = "Cosine", k = 10)
+    param = list(method = "Cosine", k = 30)
   ),
   "UBCF Pearson" = list(
     name = "UBCF",
-    param = list(method = "Pearson", k = 10)
+    param = list(method = "Pearson", nn = 30)
   )
 )
 
 steps <- c(10, 15, 20, 25, 30)
 ```
 
-Jetzt plotten wir die 5 Modelle für data_400
+Now we plot the 5 models for data_400
 
-Als Metriken benutzen wir True Positive Rate (TPR) und False Positive Rate (FPR:
+We use True Positive Rate (TPR) and False Positive Rate (FPR) as metrics:
 
 True Positive Rate (TPR):
-Anteil der tatsächlichen positiven Instanzen, die vom Modell korrekt als positiv vorhergesagt wurden.
-  Formel: TPR = TP / (TP + FN)
-  TP (True Positive): Anzahl der korrekt als positiv vorhergesagten Instanzen.
-  FN (False Negative): Anzahl der falsch als negativ vorhergesagten Instanzen.
-  
-  
+Proportion of true positive instances that were correctly predicted as positive by the model.
+  Formula: TPR = TP / (TP + FN)
+  TP (True Positive): Number of instances correctly predicted as positive.
+  FN (False Negative): Number of instances falsely predicted as negative.
+
 False Positive Rate (FPR):
-FPR ist der Anteil der tatsächlich negativen Instanzen, die vom Modell fälschlicherweise als positiv vorhergesagt wurden.
-  Formel: FPR = FP / (FP + TN)
-  FP (False Positive): Anzahl der falsch als positiv vorhergesagten Instanzen.
-  TN (True Negative): Anzahl der korrekt als negativ vorhergesagten Instanzen.
+FPR is the proportion of true negative instances that were incorrectly predicted as positive by the model.
+  Formula: FPR = FP / (FP + TN)
+  FP (False Positive): Number of instances falsely predicted as positive.
+  TN (True Negative): Number of instances correctly predicted as negative.
+
 ```{r}
 comparemod400 <- evaluate(top_400_scheme, approaches,
   n = steps, type = "topNList",
@@ -1861,90 +1786,53 @@ comparemod400 <- evaluate(top_400_scheme, approaches,
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
 
-Unser SVD Modell ist klar das beste Modell. Doch vielleicht lässt sich das SVD Modell
-noch mithilfe von Hyperparameter optimieren.
+Plot Interpretation: Generally, an model that produces a curve closer to the top left corner of
+the plot (high TPR, low FPR) would be considered better performing.
+The plot suggests that there are differences in how each model performs,
+with some trade-offs between TPR and FPR.
 
-Der Standardwert von gamna is 0.015
-Der Standardwert von lambda ist 0.001(https://rdrr.io/cran/recommenderlab/src/R/RECOM_SVDF.R)
-
-Der Standardwert von lambda ist 0.001
+But perhaps the SVD model can be be optimized with the help of hyperparameters.
 
 ## 6.9.4 Hyperparameter
-Experimentieren mit gamna:
+The default value of gamna is 0.015
+The default value of lambda is 0.001 (https://rdrr.io/cran/recommenderlab/src/R/RECOM_SVDF.R)
+The default value of lambda is 0.001
+
 ```{r}
-top_400_scheme <- evaluationScheme(rrm_400,
+# Experimentieren mit lambda
+top_400_scheme <- evaluationScheme(
+  matrixReduced1,
   goodRating = gR,
   method = "cross-validation",
-  k = 10, given = 20
-)
-approaches <- list(
-  "Popular movies" = list(name = "POPULAR", param = NULL),
-  "SVD gamma 0.005" = list(
-    name = "SVD",
-    param = list(k = 10, gamma = 0.005)
-  ),
-  "SVD gamma 0.010" = list(
-    name = "SVD",
-    param = list(k = 10, gamma = 0.010)
-  ),
-  "SVD gamma def(0.015)" = list(
-    name = "SVD",
-    param = list(k = 10, gamma = 0.015)
-  ),
-  "SVD gamma 0.020" = list(
-    name = "SVD",
-    param = list(k = 10, gamma = 0.020)
-  ),
-  "SVD gamma 0.025" = list(
-    name = "SVD",
-    param = list(k = 10, gamma = 0.025)
-  ),
-  "SVD gamma 0.5" = list(
-    name = "SVD",
-    param = list(k = 10, gamma = 0.5)
-  )
-)
-
-comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = "topNList", progress = FALSE)
-
-plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
-```
-Alle gamma scheinen aufeinander zu liegen. Der hyperparameter gamma scheint nicht wichtig zu sein.
-
-
-Experimentieren mit lambda:
-```{r}
-top_400_scheme <- evaluationScheme(rrm_400,
-  goodRating = gR,
-  method = "cross-validation",
-  k = 10, given = 20
+  k = 10,
+  given = 20
 )
 
 approaches <- list(
   "Popular movies" = list(name = "POPULAR", param = NULL),
   "SVD lambda 0.0001" = list(
     name = "SVD",
-    param = list(k = 10, lambda = 0.0001)
+    param = list(k = 50, lambda = 0.0001)
   ),
   "SVD lambda def(0.001)" = list(
     name = "SVD",
-    param = list(k = 10, lambda = 0.001)
+    param = list(k = 50, lambda = 0.001)
   ),
   "SVD lambda 0.002" = list(
     name = "SVD",
-    param = list(k = 10, lambda = 0.002)
+    param = list(k = 50, lambda = 0.002)
   ),
   "SVD lambda 0.005" = list(
     name = "SVD",
-    param = list(k = 10, lambda = 0.005)
+    param = list(k = 50, lambda = 0.005)
   ),
   "SVD lambda 0.01" = list(
     name = "SVD",
-    param = list(k = 10, lambda = 0.01)
+    param = list(k = 50, lambda = 0.01)
   ),
   "SVD lambda 0.02" = list(
     name = "SVD",
-    param = list(k = 10, lambda = 0.02)
+    param = list(k = 50, lambda = 0.02)
   )
 )
 
@@ -1952,5 +1840,37 @@ comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = "topNLis
 
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
+The plot provided gives us insight into how different values of lambda should impact the True Positive Rate (TPR)
+and False Positive Rate (FPR) for the SVD recommender compared to a baseline 'Popular movies' recommender.
+By varying lambda, we should observe changes in the ROC curve, which indicate the trade-off between the TPR and
+FPR at different thresholds, but thats not the case.
+We dont know where the problem is.
 
-Wir sehen wieder keinen Unterschied, egal wie sehr wir die Parameter anpassen.
+# 6.10 Implementierung Top-N Monitor [20 Punkte]
+Aufgabe 10 (DIY): Untersuche die relative Übereinstimmung zwischen Top-N Empfehlungen und
+präferierten Filmen für das “beste” Modell und zwei weiteren Modelle bzw. -parametrisierungen.
+1. Fixiere 20 zufällig gewählte Testnutzer*innen für alle Modellvergleiche,
+2. Bestimme den Anteil der Top-N Empfehlung nach Genres pro Nutzer*in,
+3. Bestimme pro Nutzer*in den Anteil nach Genres seiner Top-Filme (=Filme mit besten Bewertungen),
+4. Vergleiche pro Nutzer*in Top-Empfehlungen vs Top-Filme nach Genres,
+5. Definiere eine Qualitätsmetrik für Top-N Listen und teste sie
+
+Diese Aufgabe ist eine Fortsetzung von Aufgabe 9.
+• Der Top-N Monitor erlaubt zu überprüfen, ob die gemachten Empfehlungen den Präferenzen der
+Nutzer*innen entsprechen und verwendet eine einfach verständliche Visualisierung.
+• Die eigene Implementierung einer Qualitätsmetrik ist gründlich zu prüfen und zu dokumentieren.
+
+```{r}
+getRandomUsers <- function(data, nUsers, seed) {
+  set.seed(seed)
+  testUsers <- sample(1:nrow(data), num_users)
+  dataTest <- data[testUsers, ]
+  return(
+    list(
+      testUsers, dataTest
+    )
+  )
+}
+
+randomUsers <- getRandomUsers(MovieLense, 20, 42)
+```
