@@ -1,6 +1,6 @@
 ---
 title: "MC1RSY"
-author: "Tobias Lauber"
+author: "Tobias Lauber, Haris Alic"
 date: "2023-10-05"
 output: html_document
 ---
@@ -33,28 +33,27 @@ see it as data frame
 # Convert the realRatingMatrix to a data frame
 movie_data <- as(MovieLense, "data.frame")
 
-
 # View the first few rows of the data frame
 head(movie_data, 20)
 ```
 ```{r}
 column_names <- colnames(MovieLense)
-#print(column_names)
+# print(column_names)
 ```
 
 
 # 6.1 Explorative Datenanalyse [10 Punkte]
-1)
+1. Welches sind die am häufigsten geschauten Genres/Filme?
 ```{r}
-#we look at slotnames
+# we look at slotnames
 slotNames(MovieLense)
 ```
 
 ```{r}
-#classes
+# classes
 class(MovieLense@data)
 ```
-We now look at all the unique vector ratings
+**We now look at all the unique vector ratings**
 ```{r}
 vector_ratings <- as.vector(MovieLense@data)
 unique(vector_ratings)
@@ -72,54 +71,82 @@ views_per_movie <- colCounts(MovieLense)
 dfrat <- data.frame(
   movie = names(views_per_movie),
   views = views_per_movie
-  )
+)
 dfviews <- dfrat[order(dfrat$views, decreasing = TRUE), ]
 head(dfviews)
 ```
 here we have our 10 most watched movies as a plot
 
 ```{r}
-ggplot(dfviews[1:10, ], aes(x = movie, y = views)) +
-  geom_bar(stat="identity") + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  ggtitle("Number of views of the top movies")
+df <- as(MovieLense, "data.frame")
+dfMeta <- as(MovieLenseMeta, "data.frame")
+
+movieCount <- df %>%
+  group_by(item) %>%
+  summarize(freq = n()) %>%
+  arrange(desc(freq))
+
+ggplot(
+  head(movieCount, 10),
+  aes(x = reorder(item, -freq), y = freq)
+) +
+  geom_bar(stat = "identity") +
+  xlab("Movie Titles") +
+  ylab("Frequency") +
+  ggtitle("Top 10 Most Frequent Movies") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
-##genres
+We see the top 10 most frequent watched movies, further below we investigate which genres are the most frequent watched.
 
-genres are in movielensemeta data.
+Genres are in movielensemeta data.
 1 means the genre is represent in the movie.
 0 means it is not.
 By using that logic, we can summarise the columns, and the result is the number of occurenses of the genres in movielense.
 ```{r}
-#Create new df and remove useless columns
-popular_genresdf <- MovieLenseMeta %>% select(-c('title', 'year', 'url'))
+# # Create new df and remove useless columns
+# popular_genresdf <- MovieLenseMeta %>% select(-c("title", "year", "url"))
 
-# count the number of columns
-views_per_genre <- popular_genresdf %>%
-  summarise(across(everything(), sum)) %>%
-  arrange(desc(.))
+# # count the number of columns
+# views_per_genre <- popular_genresdf %>%
+#   summarise(across(everything(), sum)) %>%
+#   arrange(desc(.))
 
-views_per_genre
+# views_per_genre
 ```
 ```{r}
 # Convert data to the pivot long format
-views_per_genre_long <- views_per_genre %>%
-  pivot_longer(everything(), names_to = "Column", values_to = "Sum")
+# views_per_genre_long <- views_per_genre %>%
+#   pivot_longer(everything(), names_to = "Column", values_to = "Sum")
 
+# Count the frequency of each genre and create a new data frame
+merged <- left_join(df, dfMeta, by = c("item" = "title"))
+# Summarize by Genre
+dfMetaGenres <- select(dfMeta, -(1:3))
+# sum all genre columns
+genreCount <- colSums(dfMetaGenres, na.rm = TRUE)
+# create df
+genreCountDf <- data.frame(genre = names(genreCount), freq = genreCount)
 # Create a bar plot
-ggplot(views_per_genre_long, aes(x = Column, y = Sum, fill = Column)) +
+ggplot(
+  genreCountDf,
+  aes(x = reorder(genre, -freq), y = freq)
+) +
   geom_bar(stat = "identity") +
-  geom_text(aes(label = Sum), vjust = -0.5) +  # Add labels above the bars
-  labs(title = "Sum of Each Genre", x = "Genre", y = "Count") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))+# Rotate xaxis
-  coord_cartesian(ylim = c(0, max(views_per_genre_long$Sum) + 200)) +
-  guides(fill = 'none')
-
-
+  xlab("Genres") +
+  ylab("Total Frequency") +
+  ggtitle("Most Frequently Watched Genres") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
-## 6.1  2)
+The plot shows the most frequently watches genres in descending order.
+There is a clear imbalance in the genres, which can lead to a popularity bias, say the tendency to recommend popular items.
+Which in turn can lead to even more people watching dramas and reinforce the bias.
+An additional problem is that the same movie can be categorized in multiple genres, 
+which can be misleading for the interpretation of the data.
+
+## 6.1  
+2. Wie verteilen sich die Nutzerratings der Filme gesamthaft bzw. nach Genres?
 
 ```{r}
 MovieLenseMeta
@@ -134,12 +161,14 @@ colnames(movie_data)
 movie_data
 ```
 
-We need to join the 2 dataframes. The only thing they have in common are the movie titles. So that is 
+We need to join the 2 dataframes.
+The only thing they have in common are the movie titles.
 ```{r}
+# Grouped by Genre 1 plot
 # Merge the data frames based on movie titles. We will further use this
-
-merged_data <- left_join(movie_data, MovieLenseMeta, 
-                         by = c("item" = "title"))
+merged_data <- left_join(movie_data, MovieLenseMeta,
+  by = c("item" = "title")
+)
 
 # Create a new data frame with genres and ratings
 genre_ratings <- merged_data %>%
@@ -155,15 +184,52 @@ genre_ratings <- merged_data %>%
 ggplot(genre_ratings, aes(x = genre, y = avg_rating, fill = avg_rating)) +
   geom_bar(stat = "identity") +
   geom_text(aes(label = round(avg_rating, 2), vjust = -0.5), size = 3) +
-  coord_cartesian(ylim = c(0,5)) +
+  coord_cartesian(ylim = c(0, 5)) +
   xlab("Genre") +
   ylab("Average Rating") +
-  ggtitle("Distribution of Ratings by Genre")+
+  ggtitle("Distribution of Ratings by Genre") +
   scale_fill_gradient(low = "black", high = "blue") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-## 6.1 3)
+```{r}
+# install.packages("testthat")
+library(testthat)
+# Grouped by Genre multiple plots
+genreRatings <- data.frame()
+mergedRatingsGenre <- left_join(df, dfMeta, by = c("item" = "title"))
+genreCols <- names(dfMetaGenres)
+
+for (genre in genreCols) {
+  # Filter the data to only include ratings for movies that belong to the current genre
+  filteredData <- mergedRatingsGenre[mergedRatingsGenre[genre] == 1, ]
+  # Add ratings to a new data frame tagged by genre
+  rows <- data.frame(rating = filteredData$rating, genre = genre)
+  # Add new rows to result data frame
+  genreRatings <- rbind(genreRatings, rows)
+}
+ggplot(
+  genreRatings,
+  aes(x = rating)
+) +
+  geom_histogram(binwidth = 0.5, fill = "grey", alpha = 0.7) +
+  facet_wrap(~genre, scales = "free_y") +
+  xlab("Rating") +
+  ylab("Frequency") +
+  ggtitle("Distribution of User Ratings by Genre") +
+  theme_minimal()
+
+# test stuff
+test_that("There are more genreRatings because one movie can be specified as multiple genres", {
+  expect_false(identical(nrow(genreRatings), nrow(df)))
+})
+```
+The distribution of user ratings is overall positive, with the majority of users rating 3 or higher.
+3, 4 and 5 dominate the ratings, but the problem with 3 is that there are users for whom a 3-star rating is a bad rating and for others it is a good rating.
+We will see how to deal with this problem later.
+
+## 6.1 
+3. Wie verteilen sich die mittleren Ratings pro Film bzw. pro Nutzer*in?
 
 ```{r}
 merged_data
@@ -187,6 +253,7 @@ cat("Minimale Filmbewertung:", min_rating, "\n")
 cat("Maximale Filmbewertung:", max_rating, "\n")
 cat("Durchschnittliche Filmbewertung:", mean_rating, "\n")
 ```
+
 Plot Mittlere Rating Filme
 ```{r}
 average_ratings_per_movie <- merged_data %>%
@@ -196,11 +263,12 @@ average_ratings_per_movie <- merged_data %>%
 # Plot
 ggplot(data = average_ratings_per_movie, aes(x = mean_rating)) +
   geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
-  labs(title = "Durchschnittliche Ratings Filme",
-       x = "Durchschnittliche Bewertung",
-       y = "Nummer an Filmen")
+  labs(
+    title = "Durchschnittliche Ratings Filme",
+    x = "Durchschnittliche Bewertung",
+    y = "Nummer an Filmen"
+  )
 ```
-
 
 Mittlere Ratings User
 ```{r}
@@ -219,17 +287,28 @@ cat("Minimale durchschnittliche Userbewertung:", min_rating, "\n")
 cat("Maximale durchschnittliche Userbewertung:", max_rating, "\n")
 cat("Durchschnittliche durchschnittliche Userbewertung:", mean_rating, "\n")
 ```
+
 Plot Mittlere Ratings User
 ```{r}
 ggplot(data = average_ratings_per_user, aes(x = mean_rating)) +
   geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
-  labs(title = "Durchschnittliche Ratings User",
-       x = "Durchschnittliche Bewertung",
-       y = "Nummer an Usern")
+  labs(
+    title = "Durchschnittliche Ratings User",
+    x = "Durchschnittliche Bewertung",
+    y = "Nummer an Usern"
+  )
 ```
 
+- Plot Average Rating Movies
+  - We see that more users give very bad ratings than very good ratings.
+    We assume these are hate ratings.
+  
+- Plot Average Ratings User
+  - The highest frequency for individual users is between 3.5 and 4.
+    That means the average user tends to rate movies generally positive.
 
-## 6.1 4)
+## 6.1 
+4. Welchen Einfluss hat die Normierung der Ratings pro Nutzer*in auf die Verteilung der mittleren Nutzer-ratings?
 
 ```{r}
 normalized_ratings <- merged_data %>%
@@ -247,33 +326,111 @@ cat("Minimale normalisierte avg Userbewertung:", min_normalized_rating, "\n")
 cat("Maximale normalisierte avg Userbewertung:", max_normalized_rating, "\n")
 cat("Durchschnittliche normalisierte avg Userbewertung:", mean_normalized_rating, "\n")
 ```
-Plot die Durchschnittliche Userratings. Diesmal mit ner Z score Normalisierung
+
+Plot the average user ratings. This time with a Z score normalization
 ```{r}
 ggplot(data = normalized_ratings, aes(x = normalized_rating)) +
   geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
-  labs(title = "Durchschnittliche Ratings User",
-       x = "Durchschnittliche Bewertung",
-       y = "Nummer an Usern")
+  labs(
+    title = "Durchschnittliche Ratings User",
+    x = "Durchschnittliche Bewertung",
+    y = "Nummer an Usern"
+  )
 ```
-Wir können sehen, das mithilfe von Normalisierung sich der Graph nach links verschiebt -> Der urchschnitt der User Ratings ist schlechter.
 
-
-## 6.1 5)
 ```{r}
-colnames(merged_data)
+# Normalize the MovieLense data
+Norm <- normalize(MovieLense)
+dfNorm <- as(Norm, "data.frame")
+head(dfNorm)
+
+# Calculate average ratings per user
+avgNormRatingUser <- dfNorm %>%
+  group_by(user) %>%
+  summarize(avgRating = mean(rating)) %>%
+  arrange(desc(avgRating))
+
+# test that the mean is around zero
+test_that("The mean is around zero", {
+  expect_true(all.equal(mean(avgNormRatingUser$avgRating), 0, tolerance = 0.01))
+})
+
+# Visualize for a subset of users for non normalized data
+df %>%
+  filter(user %in% 1:12) %>%
+  ggplot(aes(x = user, y = rating)) +
+  geom_violin(color = "grey", fill = "grey", alpha = 0.5) +
+  labs(
+    x = "User",
+    y = "Ratings",
+    title = "Distribution of Ratings from Individual Users",
+    subtitle = "Subset of Users 1-12"
+  )
+
+# Visualize for a subset of users for normalized data
+dfNorm %>%
+  filter(user %in% 1:12) %>%
+  ggplot(aes(x = user, y = rating)) +
+  geom_violin(color = "grey", fill = "grey", alpha = 0.5) +
+  labs(
+    x = "User",
+    y = "Normalized Ratings",
+    title = "Normalized Distribution of Ratings from Individual Users",
+    subtitle = "Subset of Users 1-12"
+  )
 ```
-#Einschub ir nehmen jetzt normalized ratings
+
+- Plot Average Ratings User
+  We can see that normalization shifts the graph to the left
+  -> The average of the user ratings is worse.
+
+- Plot Violine
+  Normalization eliminates user bias in collaborative filtering.
+  Different users may have different rating standards, some may be more generous than others.
+  Normalization centers each users rating around zero, making comparisons between users more meaningful,
+  e.g. a normalized rating of zero would mean that the user finds the object average by their own standards.
+  Before normalization, we do not see a clear difference between users rating preferences,
+  while after normalization we see the similarities between users and their rating preferences, whether negative or positive.
+
+## 6.1 
+
+5. Welche strukturellen Charakteristika und Auffälligkeiten zeigt die User-Item Matrix?
+
 ```{r}
-matrix_stand <- normalize(MovieLense, method="Z-Score")
-movie_data <- as(matrix_stand, "data.frame") #movie lense durch matrix stand
-merged_data <- left_join(movie_data, MovieLenseMeta, 
-                         by = c("item" = "title"))
+# install.packages("viridis")
+library(viridis)
+# Set a random seed for reproducibility
+set.seed(42)
 
+smallM <- MovieLense[
+  sample(nrow(MovieLense), 50), sample(ncol(MovieLense), 50)
+]
+# Visualize the sparsity pattern of the smallMovieLense matrix
+library(Matrix)
+image(as(smallM, "matrix"), main = "Sparsity Pattern of User-Item Matrix", xlab = "Items", ylab = "Users", col = viridis(5))
+legend("topright", legend = c("1", "2", "3", "4", "5"), fill = viridis(5), title = "Rating")
+
+# Calculate sparsity level
+movieMatrix <- as(MovieLense, "matrix")
+totalN <- length(movieMatrix)
+filledN <- sum(
+  !is.na(movieMatrix) & movieMatrix > 0,
+  na.rm = TRUE
+)
+sparsityLevel <- (totalN - filledN) / totalN
+print(paste("Sparsity Level: ", round(sparsityLevel * 100, 2), "%"))
 ```
 
+The user item matrix represents the interactions or ratings between users and items.
+In the image the colored dots represent interactions or in our case ratings.
+The large number of empty space indicates that users have not interacted with any item.
+This is a common problem in real world user-item matrices,
+as not every user interacts with every item.
+The sparsity level of the item-user-matrix for the movielens dataset is ca. 93.7%.
 
 # 6.2 Datenreduktion [6 Punkte]
-600 nutzer und 700 Filme
+Aufgabe 2: Reduziere den MovieLens Datensatz auf rund 400 Nutzerinnen und 700 Filme, indem du Filme und Nutzerinnen mit sehr wenigen Ratings entfernst.
+1. Anzahl Filme und Nutzer*innen sowie Sparsity vor und nach Datenreduktion
 
 ```{r}
 # Filtere 400 aktivste users
@@ -294,9 +451,8 @@ top_movies <- merged_data %>%
   select(item)
 
 # Reduziere dataset für Filme und User
-top_400_data <- merged_data %>%
+dataFrame1 <- merged_data %>%
   filter(user %in% top_400_users$user, item %in% top_movies$item)
-
 ```
 For 400
 
@@ -312,25 +468,24 @@ cat("Number of movies before reduction:", num_movies_before, "\n")
 cat("Sparsity before reduction:", sparsity_before, "\n")
 ```
 
-After
+After reduction
 ```{r}
-num_users_after <- length(unique(top_400_data$user))
-num_movies_after <- length(unique(top_400_data$item))
-sparsity_after <- 1 - (nrow(top_400_data) / (num_users_after * num_movies_after))
+num_users_after <- length(unique(dataFrame1$user))
+num_movies_after <- length(unique(dataFrame1$item))
+sparsity_after <- 1 - (nrow(dataFrame1) / (num_users_after * num_movies_after))
 
 # Output after reduction
 cat("Number of users after reduction:", num_users_after, "\n")
 cat("Number of movies after reduction:", num_movies_after, "\n")
 cat("Sparsity after reduction:", sparsity_after, "\n")
 ```
-Das macht Sinn, denn wenn wir die User welche weniger Filme schauen rauskicken, dann sollte sich die Sparsity veringern.
+That makes sense, because if we kick out the users who watch fewer movies, then the sparsity should decrease.
 
-plot Avarage ratings. Wir benutzen gridExtra für einfaches plotten
-
+Plot Avarage ratings.
 ```{r}
 library(gridExtra)
 
-avg_ratings_400 <- top_400_data %>%
+avg_ratings_400 <- dataFrame1 %>%
   group_by(item) %>%
   summarize(mean_rating = mean(rating))
 
@@ -340,23 +495,24 @@ avg_ratings_full <- merged_data %>%
 
 avg400 <- ggplot(data = avg_ratings_400, aes(x = mean_rating)) +
   geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
-  labs(title = "400er Reduktion",
-       x = "Durchschnittliche Bewertung",
-       y = "Anzahl Filme")
+  labs(
+    title = "400er Reduktion",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
 
 avgfull <- ggplot(data = avg_ratings_full, aes(x = mean_rating)) +
-  geom_histogram(binwidth = 0.1, fill = 'blue', color = 'black') +
-  labs(title = 'voller Datensatz',
-       x = "Durchschnittliche Bewertung",
-       y = "Anzahl Filme")
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "voller Datensatz",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
 
-grid.arrange(avg400, avgfull, ncol = 2) 
-
+grid.arrange(avg400, avgfull, ncol = 2)
 ```
 
-
-600
-
+Second dataframe with 400 best users sliced between 200 and 600.
 ```{r}
 top_600_users <- merged_data %>%
   group_by(user) %>%
@@ -374,12 +530,40 @@ top_movies <- merged_data %>%
   select(item)
 
 # Reduziere dataset für Filme und User
-top_600_data <- merged_data %>%
+dataFrame2 <- merged_data %>%
   filter(user %in% top_600_users$user, item %in% top_movies$item)
 ```
 
+Plot average ratings for 600
+```{r}
+avg_ratings_600 <- dataFrame2 %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
 
-Nochmal, das war bevor der Datenreduktion
+avg_ratings_full <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg600 <- ggplot(data = avg_ratings_600, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "600er Reduktion",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
+
+avgfull <- ggplot(data = avg_ratings_full, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "voller Datensatz",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
+
+grid.arrange(avg600, avgfull, ncol = 2)
+```
+
+Again, before data reduction
 ```{r}
 num_users_before <- length(unique(merged_data$user))
 num_movies_before <- length(unique(merged_data$item))
@@ -390,39 +574,12 @@ cat("Number of users before reduction:", num_users_before, "\n")
 cat("Number of movies before reduction:", num_movies_before, "\n")
 cat("Sparsity before reduction:", sparsity_before, "\n")
 ```
-Das ist nachdem man auf die 600 relevantesten User reduziert hat, ohne die 200 relevantesten User.
-
-Plot average ratings für 600
-```{r}
-avg_ratings_600 <- top_600_data %>%
-  group_by(item) %>%
-  summarize(mean_rating = mean(rating))
-
-avg_ratings_full <- merged_data %>%
-  group_by(item) %>%
-  summarize(mean_rating = mean(rating))
-
-avg600 <- ggplot(data = avg_ratings_600, aes(x = mean_rating)) +
-  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
-  labs(title = "600er Reduktion",
-       x = "Durchschnittliche Bewertung",
-       y = "Anzahl Filme")
-
-avgfull <- ggplot(data = avg_ratings_full, aes(x = mean_rating)) +
-  geom_histogram(binwidth = 0.1, fill = 'blue', color = 'black') +
-  labs(title = 'voller Datensatz',
-       x = "Durchschnittliche Bewertung",
-       y = "Anzahl Filme")
-
-grid.arrange(avg600, avgfull, ncol = 2) 
-```
-
-
+This is after you have reduced to the 600 most relevant users, without the 200 most relevant users.
 
 ```{r}
-num_users_after <- length(unique(top_600_data$user))
-num_movies_after <- length(unique(top_600_data$item))
-sparsity_after <- 1 - (nrow(top_600_data) / (num_users_after * num_movies_after))
+num_users_after <- length(unique(dataFrame2$user))
+num_movies_after <- length(unique(dataFrame2$item))
+sparsity_after <- 1 - (nrow(dataFrame2) / (num_users_after * num_movies_after))
 
 # Output after reduction
 cat("Number of users after reduction:", num_users_after, "\n")
@@ -430,13 +587,19 @@ cat("Number of movies after reduction:", num_movies_after, "\n")
 cat("Sparsity after reduction:", sparsity_after, "\n")
 ```
 
-Die Sparsity ist zwar besser als zuvor, aber natürlich schlechter als bei den top 400 Usern, da man statt den 200 meist aktivsten Usern die 401-600 aktivsten Nutzer hat. 
+The sparsity with 943 users and 1664 films is 0.93, which is very high.
+We reduce the data set to 400 users (who gave the most ratings) and 700 movies.
+We see that the sparsity has dropped to 76 percent, which is reasonable,
+because we have the most active users and most rated movies left.
+The second reduced data frame takes the most active 600 users, but cuts out the first 200.
+We see that the sparsity increases to 88 percent.
+The first 200 most active users are no longer present, so we have a higher sparsity.
 
-
-## 6.2 3)
+## 6.2
+3. Zusatz für Gruppen: Quantifiziere die “Intersection over Union” aller reduzierten Datensätze paarweise.
 
 ```{r}
-head(top_400_data)
+head(dataFrame1)
 ```
 Die Formel ist: 
 
@@ -444,284 +607,445 @@ IOU = (# gemeinsame Filme) / (#Filme in beiden df zusammen )
 
 ```{r}
 # Distinkte Movies / User für die Beiden Dataframes
-anzahl_movies_400 <- n_distinct(top_400_data$item)
-anzahl_users_400 <- n_distinct(top_400_data$user)
+anzahl_movies_400 <- n_distinct(dataFrame1$item)
+anzahl_users_400 <- n_distinct(dataFrame1$user)
 
-anzahl_movies_600 <- n_distinct(top_600_data$item)
-anzahl_users_600 <- n_distinct(top_600_data$user)
+anzahl_movies_600 <- n_distinct(dataFrame2$item)
+anzahl_users_600 <- n_distinct(dataFrame2$user)
 
 # Intersection
-common_movies <- intersect(top_400_data$item, top_600_data$item)
-common_users <- intersect(top_400_data$user, top_600_data$user)
+common_movies <- intersect(dataFrame1$item, dataFrame2$item)
+common_users <- intersect(dataFrame1$user, dataFrame2$user)
 
-#IOU
+# IOU
 IOU_movies <- length(common_movies) / (anzahl_movies_400 + anzahl_movies_600 - length(common_movies))
 
-IOU_users <- length(common_users) / (anzahl_users_400 + 
-              anzahl_users_600 - length(common_users))
+IOU_users <- length(common_users) / (anzahl_users_400 +
+  anzahl_users_600 - length(common_users))
 
 cat("Intersection over Union für Filme:", IOU_movies, "\n")
 cat("Intersection over Union für Nutzer:", IOU_users, "\n")
 ```
-Dieses Resultat war nach unserer Datentrennung logisch, da wir die gleichen Filme verwenden und 0.333 macht auch Sinn, da nur die User 201-400 in beiden dataframes vorkommen.
-
-
-
+This result was logical after our data separation, as we use the same films and 0.333 also makes sense,
+as only users 201-400 appear in both data frames.
+The intersection over union is a measure of the overlap between two data sets.
+For the user IoU, there is an overlap of about 33% between the first and second data sets.
+For the movies IoU, the overlap between the first and second data sets is about 100%.
+The overlap is quite reasonable and therefore the data sets are not too similar.
+We could reduce the similarity by choosing other splitting techniques, e.g. instead of 400 users we could have 700,
+and the indexing could range from 1 to 500 and from 201 to 700 and see how the IoU behaves.
 
 # 6.3 Analyse Ähnlichkeitsmatrix [12 Punkte]
 
+Aufgabe 3: Erzeuge einen IBCF Recommender und analysiere die Ähnlichkeitsmatrix des trainierten Modelles für den reduzierten Datensatz.
+1. Zerlege den Datensatz in Trainings- und Testdaten im verhältnis 4:1.
+
 ```{r}
-#create real rating matrix
-rrm_400 <- top_400_data[, c("user", "item", "rating")]
-rrm_400 <- as(rrm_400, 'realRatingMatrix')
-#str(rrm_400)
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
+
+evalScheme1 <- evaluationScheme(
+  matrixReduced1,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
+evalScheme1
 ```
 
 ```{r}
-#real rating matrix 600
-rrm_600 <- top_600_data[, c("user", "item", "rating")]
-rrm_600 <- as(rrm_600, 'realRatingMatrix')
+matrixReduced2 <- as(dataFrame2, "realRatingMatrix")
+
+evalScheme2 <- evaluationScheme(
+  matrixReduced2,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
+evalScheme2
 ```
 
+We use the evaluationScheme for the first data set with the 400 most active users,
+and we decided that good ratings are equal to 4 because we thought 3 was too mediocre.
+The output is a realRatingMatrix with 67427 ratings and the training set proportion is 0.8.
+For the second dataset, we have the same parameters and there are 33300 ratings.
 
-## Datensatz 400
-Create traintestsplit
+1. Trainiere ein IBCF Modell mit 30 Nachbarn und Cosine Similarity.
+
 ```{r}
-set.seed(7)
-my_sample <- sample(c(TRUE,FALSE), nrow(rrm_400), replace = TRUE,
-                    prob = c(0.8, 0.2))
+# Get the training set from the evaluationScheme object
+trainData1 <- getData(evalScheme1, "train")
+testData1 <- getData(evalScheme1, "known")
 
-train_400 <- rrm_400[my_sample, ]
-test_400 <- rrm_400[!my_sample, ]
+trainData2 <- getData(evalScheme2, "train")
+testData2 <- getData(evalScheme2, "known")
+
+# Train the IBCF model
+trainedModel1 <- Recommender(
+  trainData1,
+  method = "IBCF", param = list(k = 30, method = "Cosine")
+)
+trainedModel2 <- Recommender(
+  trainData2,
+  method = "IBCF", param = list(k = 30, method = "Cosine")
+)
 ```
 
-Item Based Collaberative Filtering for 400 rrm
+Top 400
 ```{r}
-IBCF_model <- Recommender(train_400, method = 'IBCF',
-                          param = list(method = 'Cosine', k = 30))
+sim_400 <- getModel(trainedModel1)$sim
+image(getModel(trainedModel1)$sim,
+  main = "IBCF Similarity Matrix Heatmap for top 400"
+)
 ```
 
-Now we plot a heatmap of the top_400 similarity matrix
+Top 600 without first 200
 ```{r}
-sim_400 <- getModel(IBCF_model)$sim
-image(getModel(IBCF_model)$sim, 
-      main = 'top_400 similarity matrix Heatmap')
+sim_600 <- getModel(trainedModel2)$sim
+image(getModel(trainedModel2)$sim,
+  main = "IBCF Similarity Matrix Heatmap for top 600 (without first 200)"
+)
 ```
 
-## 6.3 3)
+The first diagram entitled "Top 600 (excluding the first 200) similarity matrix heatmap," 
+shows an unevenly distributed heatmap and appears quite sparse.
+The second chart, titled "IBCF Similarity Matrix Heatmap for top 400," shows a slightly denser heatmap,
+which suggests that a greater number of similarities may have been identified between the articles.
+The difference in active users can be derived from the density of interactions.
+If a model has more active users, we would expect a denser similarity matrix as there are more reviews and interactions from which similarities can be derived.
+interactions from which similarities can be calculated.
+The heatmap with more dots (or less white space) could be the one with more active users, assuming that "active
+refers to the frequency or volume of ratings given by users. More active users usually lead to a
+denser similarity matrix as there are more data points to calculate the similarities between each item
+
+## 6.3 
+3. Bestimme die Filme, die am häufigsten in der Cosine-Ähnlichkeitsmatrix auftauchen und analyisiere Vorkommen und Ratings im reduzierten Datensatz.
 generelle Verteilung der Anzahl an 'Auftauchen' in der Cosine Ähnlichkeitsmatrix
+
 ```{r}
-sums400 <- colSums(sim_400 != 0) 
+sums400 <- colSums(sim_400)
 twentytop_400 <- head(sort(sums400, decreasing = TRUE), 20)
-hist(sums400, breaks = 50, main = 'Distribution in Similarity Matrix sim_400', xlab = '#Auftauchungen', ylab = '#Movies')
+hist(
+  sums400,
+  breaks = 50, main = "Distribution of Movie Rating Occurences",
+  xlab = "Amount of Times Rated",
+  ylab = "Number of Movies that occur x times"
+)
 ```
-Wir sehen, dass ein grosser ANteil an Movies gar nicht bis nur sehr wenig vorkommt. Der grösste ANteil an Filmen liegt zwischen 0 und 50 Auftauchungen. Die anzahl Filme pro Auftauchungen nehmen je grösser die #Auftauchungen werden immer mehr ab
+We can see that a large proportion of movies do not appear at all or only very rarely (left side).
+The largest proportion of movies rated is between 0 and 50 occurrences.
+We conclude that most movies are rated very rarely.
 
-
+```{r}
+sumsDF2 <- colSums(sim_600)
+twentytop_600 <- head(sort(sumsDF2, decreasing = TRUE), 20)
+hist(
+  sumsDF2,
+  breaks = 50, main = "Distribution of Movie Rating Occurences",
+  xlab = "Amount of Times Rated",
+  ylab = "Number of Movies that occur x times"
+)
+```
+Because the users from the second dataset are less active than the users from the first dataset, 
+we see more movies are rated fewer times.
 
 ```{r}
 twentytop_400
 ```
-Dies hier sind die 20 Filme, welche die meiste #Auftauchungen hatten.
+These are the top 20 most rated movies for the first data set.
 
-Analyse mit top_400_data
-```{r}
-ggplot() + geom_histogram(data = top_400_data %>% group_by(item) %>%
-                            count(), aes(n), binwidth = 0.05, color = 'blue', fill = 'white', alpha = 0.5) +
-  labs(title = 'top_400_data: Number of Ratings per Movie',
-       x = '#ratings', y = '#movies', subtitle = 'top 20 Movies from cos IBCF from above in green') +
-  geom_vline(xintercept = twentytop_400, color = 'green')
-```
-
-Unsere Filme des IBCF sind eher im Mittelfeld der ratings. Wir fragen uns, ob wir dies vielleicht nicht noch optimieren können.
-
-
-HYPOTHESE: Durch das entfernen von NA werten aus unserer Similarity Matrix, werden Filme mit mehr Ratings gewählt. Wir werden diese Hypothese
-nachdem wir die Ratings dieser gewählten Filme anschauen überprüfen.
-
-
-Ratings der 20 Filme
-```{r}
-names_twentytop_400 <- names(twentytop_400)
-
-top20simmrat = top_400_data %>% group_by(item) %>% 
-  filter(item %in% names_twentytop_400)
-
-ggplot() + geom_histogram(data = top20simmrat, aes(rating), binwidth = 0.1) + facet_wrap(vars(top20simmrat$item)) +
-  labs(x = ' normalized_ratings', 
-       y = '#ratings', title = 'Movie ratings distribution')
-```
-
-## Datensatz 600
-
-
-```{r}
-#real rating matrix 600
-rrm_600 <- top_600_data[, c("user", "item", "rating")]
-rrm_600 <- as(rrm_600, 'realRatingMatrix')
-```
-
-traintest split
-```{r}
-set.seed(7)
-my_sample <- sample(c(TRUE,FALSE), nrow(rrm_600), replace = TRUE,
-                    prob = c(0.8, 0.2))
-
-train_600 <- rrm_600[my_sample, ]
-test_600 <- rrm_600[!my_sample, ]
-```
-
-
-Item Based Collaberative Filtering for 600 rrm
-```{r}
-IBCF_model <- Recommender(train_600, method = 'IBCF',
-                          param = list(method = 'Cosine', k = 30))
-```
-
-Now we plot a heatmap of the top_600 similarity matrix
-```{r}
-sim_600 <- getModel(IBCF_model)$sim
-image(getModel(IBCF_model)$sim, 
-      main = 'top_600 similarity matrix Heatmap')
-```
-
-generelle Verteilung der Anzahl an 'Auftauchen' in der Cosine Ähnlichkeitsmatrix
-```{r}
-sums600 <- colSums(sim_600 != 0) 
-twentytop_600 <- head(sort(sums600, decreasing = TRUE), 20)
-hist(sums600, breaks = 50, main = 'Distribution in Similarity Matrix sim_600', xlab = '#Auftauchungen', ylab = '#Movies')
-```
-Wir sehen, dass die meisten Auftauchungen hier klar um 0 sind.
-
-Hier sind unsere 20 hüfigsten Filme
 ```{r}
 twentytop_600
 ```
-Interessant ist das Filme 'Fallen (1998)' welcher am meisten im
-Datensatz 400 auftrat, hier nicht einmal die top20 schafft.
+These are the top 20 most rated movies for the second data set.
+It is interesting that the film 'Fallen (1998)', which appeared the most in the
+data set 400, does not even make the top20 here.
 
-
-Analyse mit top_600_data
+First Data Set
 ```{r}
-ggplot() + geom_histogram(data = top_600_data %>% group_by(item) %>%
-                            count(), aes(n), binwidth = 0.05, color = 'blue', fill = 'white', alpha = 0.5) +
-  labs(title = 'top_600_data: Number of Ratings per Movie',
-       x = '#ratings', y = '#movies', subtitle = 'top 20 Movies from cos IBCF from above in green') +
-  geom_vline(xintercept = twentytop_600, color = 'green')
+ggplot() +
+  geom_histogram(data = dataFrame1 %>% group_by(item) %>%
+    count(), aes(n), binwidth = 0.05, color = "blue", fill = "white", alpha = 0.5) +
+  labs(
+    title = "Comparison between Recommendation and Reduced Data Set 1",
+    subtitle = "Top 20 Movies from IBCF in green",
+    x = "Amount of Ratings",
+    y = "Amount of Movies",
+  ) +
+  geom_vline(xintercept = twentytop_400, color = "green")
 ```
-Wir nehmen erneut Filme mit einigen Ratings, aber nicht die Filme mit den
-meisten Ratings. Wir schauen noch, ob sich das ganze optimieren lässt.
+The blue histogram shows the number of ratings per movie for the first data set.
+The green lines show the 20 most rated movies from the IBCF.
+We see that the recommendations tend to be in the middle of the distribution.
+The model has not choosed the most rated movies.
 
-## Na durch 0 ersetzten. In Arbeit
+Second Data Set
 ```{r}
+ggplot() +
+  geom_histogram(data = dataFrame2 %>% group_by(item) %>%
+    count(), aes(n), binwidth = 0.05, color = "blue", fill = "white", alpha = 0.5) +
+  labs(
+    title = "Comparison between Recommendation and Reduced Data Set 1",
+    subtitle = "Top 20 Movies from IBCF in green",
+    x = "Amount of Ratings",
+    y = "Amount of Movies",
+  ) +
+  geom_vline(xintercept = twentytop_600, color = "green")
+```
+The blue histogram shows the number of ratings per film for the first data set.
+The green lines show the 20 best-rated films from the IBCF.
+It can be seen that the recommendations tend to lie in the middle of the distribution,
+regardless of the skewness of the distribution.
+The model has a balanced recommendation between rarely and frequently rated films.
 
+Movie Ratings Distribution (Normalized) for top 20 (first data set)
+```{r}
+names_twentytop_400 <- names(twentytop_400)
+
+top20simmrat <- dataFrame1 %>%
+  group_by(item) %>%
+  filter(item %in% names_twentytop_400)
+
+ggplot() +
+  geom_histogram(data = top20simmrat, aes(rating), binwidth = 0.1) +
+  facet_wrap(vars(top20simmrat$item)) +
+  labs(
+    x = "Normalized Ratings",
+    y = "Number of Ratings",
+    title = "Movie Ratings Distribution (Normalized) for top 20 Movies"
+  )
+```
+We see for each individual movie of our recommender (top 400) how it was rated, 
+e.g. the "When We Were Kings (1996)" was rated very positively,
+where as "Excess Baggage (1997)" was rated very negatively.
+
+Movie Ratings Distribution (Normalized) for top 20 (second data set)
+```{r}
+names_twentytop_600 <- names(twentytop_600)
+
+top20simmrat <- dataFrame2 %>%
+  group_by(item) %>%
+  filter(item %in% names_twentytop_600)
+
+ggplot() +
+  geom_histogram(data = top20simmrat, aes(rating), binwidth = 0.1) +
+  facet_wrap(vars(top20simmrat$item)) +
+  labs(
+    x = "Normalized Ratings",
+    y = "Number of Ratings",
+    title = "Movie Ratings Distribution (Normalized) for top 20 Movies"
+  )
+```
+The distribution is much sparser than before.
+We can see for each individual movie of our recommender (second data set) how it was rated, 
+In contrast to the other data set, this one tends to be rated more positively,
+For example, the film "Short Cuts (1993)" was rated very positively,
+whereas "Sirens (1994)" was rated rather negatively.
+
+4. Wiederhole die Analyse, indem du bei der Datenpartitionierung die Anzahl nicht-maskierter
+   Produkte der Test-User veränderst und kommentiere den Einfluss auf die Resultate.
+```{r}
+# Convert from df to realRatingMatrix
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
+
+# Define the given values to iterate over
+given_values <- c(5, 10, 20, 40)
+
+# Iterate over the different given values
+for (given in given_values) {
+  cat("Processing for given =", given, "\n")
+
+  # Create evaluation scheme
+  evalScheme <- evaluationScheme(
+    matrixReduced1,
+    method = "split",
+    train = 0.8,
+    given = given,
+    goodRating = 4
+  )
+
+  # Train the IBCF model
+  trained_model <- Recommender(
+    getData(evalScheme, "train"),
+    method = "IBCF",
+    param = list(k = 30, method = "Cosine")
+  )
+
+  # Extract the similarity matrix
+  simMatrix <- getModel(trained_model)$sim
+
+  # Find the top 10 most similar movies
+  top10 <- apply(simMatrix, 1, function(x) {
+    order(x, decreasing = TRUE)[1:10]
+  })
+
+  # Unlist and tabulate to find most frequent
+  mostFrequentMovies <- table(as.vector(top10))
+  # Sort
+  mostFrequentMovies <- sort(mostFrequentMovies, decreasing = TRUE)
+
+  # Process for ggplot2
+  dfMostFrequentMovies <- as.data.frame(mostFrequentMovies)
+  colnames(dfMostFrequentMovies) <- c("item", "freq")
+
+  # Get the names for the movies for given ids in mostFreqentMovies
+  dfMostFrequentMovies$MovieTitle <- dfMeta[as.numeric(names(mostFrequentMovies)), "title"]
+
+  # Visualize
+  p <- ggplot(
+    head(dfMostFrequentMovies, 10),
+    aes(x = reorder(MovieTitle, -freq), y = freq)
+  ) +
+    geom_bar(stat = "identity") +
+    xlab("Movie Titles") +
+    ylab("Frequency") +
+    ggtitle(paste("Top 10 Most Frequent Movies in Similarity Matrix for given =", given)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  print(p)
+  ggsave(paste("similarity_matrix_given_", given, ".png", sep = ""))
+}
 ```
 
+The IBCF Recommender uses a test set of user profiles that are not part of the training but of the predictions.
+Additionally, there is a set of masked ratings to evaluate the prediction. For the masking, we use the Given-x parameter, which is a random selection 
+from all test users for the prediction, the rest is part of the evaluation.
+It turns out that the same result is not always achieved for different given values,
+e.g. the recommendation results for Given = 5 differ from those of the others.
+We can state the same for the second data set.
 
-# 6.4
-Als erstes wählen wir 100 zufällige Filme. 
+## 6.4
+Aufgabe 4 (DIY): Implementiere Funktionen zur Berechnung von Ähnlichkeitsmatrizen bei IBCF Recommenders für 
+(a) Cosine Similarity mit ordinale Ratings und 
+(b) Jaccard Similarity mit binären Ratings
+
+1. Vergleiche die Resultate beider Funktionen hinsichtlich Übereinstimmung und Laufzeit mit dem Resultat der Funktion Recommender()
+   und der eines anderen R-Paketes anhand 100 zufällig gewählter Filme.
+
+Jaccard Similarity Function
 ```{r}
-set.seed(7)
-index <- sort(sample(1:nrow(MovieLense), 100)) #wähle 100 zufällige Filme
-oursample <- MovieLense[index]
-#reguläre Werte Matrix
-oursample_Matrix <- as(oursample, "matrix")
-oursample_Matrix[is.na(oursample_Matrix)] <- 0 #ersetze na durch 0
-
-#binäre Werte Matrix
-oursample_bin <- binarize(oursample,4)
-oursample_Matrix_bin <- as(oursample_bin, "matrix")
-```
-
-Nun erstellen wir eine Jaccard SImilarity Funktion
-
-```{r}
-jaccard_similarity <- function(M) {
+getJaccardSim <- function(M) {
   A <- tcrossprod(M)
-  im <- which(A > 0, arr.ind=TRUE)
+  im <- which(A > 0, arr.ind = TRUE)
   b <- rowSums(M)
   Aim <- A[im]
   sparseMatrix(
-    i = im[,1],
-    j = im[,2],
-    x = Aim / (b[im[,1]] + b[im[,2]] - Aim),
+    i = im[, 1],
+    j = im[, 2],
+    x = Aim / (b[im[, 1]] + b[im[, 2]] - Aim),
     dims = dim(A)
   )
 }
 ```
 
-
-Wir nutzen die Jaccard similarity Funktion auf unsere binären Daten
 ```{r}
-jaccard_sim = as(jaccard_similarity(oursample_Matrix_bin), "matrix")
+set.seed(7)
+index <- sort(sample(1:nrow(MovieLense), 100)) # wähle 100 zufällige Filme
+oursample <- MovieLense[index]
+# reguläre Werte Matrix
+oursample_Matrix <- as(oursample, "matrix")
+oursample_Matrix[is.na(oursample_Matrix)] <- 0 # ersetze na durch 0
+
+# binäre Werte Matrix
+oursample_bin <- binarize(oursample, 4)
+sampledMatrix <- as(oursample_bin, "matrix")
+
+jaccard_sim <- as(getJaccardSim(sampledMatrix), "matrix")
+
+jaccard_sim[1:5, 1:5]
 ```
 
-Wir erstellen eine Cosinus Similarity Funktion
+Cosinus Similarity Function
 ```{r}
-cosinus_similarity <- function(M) 
-{
+getCosineSim <- function(M) {
   similarity <- M / sqrt(rowSums(M * M))
-  similarity[is.na(similarity)] = 0
+  similarity[is.na(similarity)] <- 0
   similarity <- similarity %*% t(similarity)
   similarity <- as(similarity, "matrix")
- 
-}   
+}
 ```
 
-
-Wir nutzen die Cosinus Similarity auf unsere regulären Daten
+We use the cosine similarity on the regular data (100 movies)
 ```{r}
-cosinus_sim <- cosinus_similarity(oursample_Matrix)
+cosinus_sim <- getCosineSim(oursample_Matrix)
+cosinus_sim[1:5, 1:5]
 ```
 
-
-## 6.4.2 Funktionsvergleich
-Wir vergleichen unsere Cosinus-Similarity Funktion mit denen aus recommenderlab auf unseren sample Datensatz.
+We compare the custom Cosine with Recommender Cosine and proxy Cosine
 ```{r}
 realRM <- as(oursample_Matrix, "realRatingMatrix")
-cosine_rec = as.matrix(similarity(realRM, method="cosine", which="users"))
+cosine_rec <- as.matrix(similarity(realRM, method = "cosine", which = "users"))
 diag(cosine_rec) <- 1
-rescale <- function(x) { return(1/2*(x+1))}
-co_sim_rec = apply(cosinus_sim, 1, rescale)
+rescale <- function(x) {
+  return(1 / 2 * (x + 1))
+}
+co_sim_rec <- apply(cosinus_sim, 1, rescale)
 
-max(abs(cosine_rec - co_sim_rec),na.rm = TRUE)
-```
+max(abs(cosine_rec - co_sim_rec), na.rm = TRUE)
 
-REcommenderlab scalt die Matrix um. Also machen wir das auch damit wir überhaubt vergleichen können
-
-Wir überprüfen nun, ob unser cosinus recommender mit dem von recommenderlabs übereinstimmt.
-```{r}
 all.equal(cosine_rec, co_sim_rec)
 ```
-Ja, macht er.
+Recommenderlab rescales the matrix, so we have to do it also.
+Now we proof if our implementation is allmost equal to the recommenderlab implementation.
+We see there is almost no difference (floating point error) between our custom implementation and the recommender cosine.
 
-Wir vergleichen nun noch unsere Implementierung mit der von dem package proxy
-
-
+Now we compare our implementation with the proxy cosine
 ```{r}
 library(proxy)
-
-# Cosine Similarity mit proxy
 proxy_cosine <- as(cosine(t(oursample_Matrix)), "matrix")
-
-# Vergleich
 max(abs(cosinus_sim - proxy_cosine))
 all.equal(cosinus_sim, proxy_cosine)
 ```
-Wir sehen, auch dieser Vergleich mit proxy fällt positiv aus.
+We see that there is almost no difference between our custom implementation and the proxy cosine.
 
-## Vergleich unserer Funktionen
-
+# Runtime
 ```{r}
-max(abs(cosinus_sim - jaccard_sim), na.rm = TRUE)
-all.equal(cosinus_sim, jaccard_sim)
+startTime <- Sys.time()
+cosineSimMatrix <- getCosineSim(oursample_Matrix)
+endTime <- Sys.time()
+runtimeCustom <- endTime - startTime
+print("Runtim for custom cosine function:")
+print(runtimeCustom)
+
+startTime <- Sys.time()
+realRM <- as(oursample_Matrix, "realRatingMatrix")
+cosine_rec <- as.matrix(similarity(realRM, method = "cosine", which = "users"))
+endTime <- Sys.time()
+runtimeCustom <- endTime - startTime
+print("Runtim for recommender cosine function:")
+print(runtimeCustom)
+
+startTime <- Sys.time()
+proxy_cosine <- as(cosine(t(oursample_Matrix)), "matrix")
+endTime <- Sys.time()
+runtimeCustom <- endTime - startTime
+print("Runtim for proxy cosine function:")
+print(runtimeCustom)
 ```
-Mit einer mean relative difference von 0.6151852 sind sie nicht sehr ähnlich. Dies liegt daran,
+The proxy cosine function is about four times slower than our custom implementation.
+The recommender cosine function is also slower than our custom implementation,
+because we have to convert the matrix into a realRatingMatrix, which requires more steps and is slower.
+is slower.
 
-Visuallisieren der Funktionen:
+1. Visualisiere und vergleiche die Verteilung der Ähnlichkeiten von Cosine Similarity für ordinale Ratings
+und von Jaccard Similarity für binäre Ratings mittels den von dir implementierten Funktionen.
+```{r}
+cos_jacc <- mean(abs(cosinus_sim - jaccard_sim), na.rm = TRUE)
+print("Mean Absolute Difference between Cosinus and Jaccard:")
+print(cos_jacc)
+```
+Interpretation:
+The Mean Absolute Difference (MAD) can be interpreted as the average error between the two measures.
+Since cosine similarity and Jaccard similarity are different metrics
+(cosine similarity takes into account the magnitude of the vectors, while Jaccard similarity is based on the presence/absence of characteristics),
+some difference is to be expected. A MAD of 0.12 indicates that there is some discrepancy between the two measures,
+the overall magnitude of this discrepancy is modest. This suggest that for the particular dataset,
+both measures are providing relatively similar information.
 
+Visualization
 ```{r}
 library(ggplot2)
+# install.packages("reshape2")
 library(reshape2)
 
 # Daten für die Heatmap vorbereiten
@@ -737,164 +1061,145 @@ cos_sim_df$Var1 <- factor(cos_sim_df$Var1, levels = movie_labels)
 cos_sim_df$Var2 <- factor(cos_sim_df$Var2, levels = movie_labels)
 
 # heatmap
-ggplot(cos_sim_df, aes(Var1, Var2, fill = Freq)) +
+ggplot(data = cos_sim_df, aes(Var1, Var2, fill = Freq)) +
   geom_tile() +
   scale_fill_gradient(low = "white", high = "blue") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
-  labs(title = "Cosine Similarity Matrix", x = "Movies", y = "Movies")+
+  labs(title = "Cosine Similarity Matrix", x = "Movies", y = "Movies") +
   scale_x_discrete(labels = rep("", nrow(cos_sim_df))) +
   scale_y_discrete(labels = rep("", nrow(cos_sim_df)))
+```
 
-#jaccard heatmap
-ggplot() +
-  geom_tile(data = jaccard_melted, aes(x = Var1, y = Var2, fill = value)) +
-  labs(title = "Jaccard Similarity Matrix") +
+```{r}
+# jaccard heatmap
+ggplot(data = jaccard_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  labs(title = "Jaccard Similarity Matrix", x = "Movies", y = "Movies") +
   theme_minimal()
 ```
 
-```{r}
+Our dataset consists of ratings which are non binary and on different scales.
+Cosine similarity (CS) can capture the nuances in user preferences more effectively than Jaccard Similarity (JS).
+The CS will consider different levels of preference (e.g. rating scales from 1 to 5),
+whereas Jaccard similarity only considers whether an item was rated or not, ignoring the rating scale.
 
-```
+Our users may rate only a small subset of all available items (high sparsity).
+CS can still find a high degree of similarity between two users even if they have rated a different number of items.
 
+Jaccard does not take into account the magnitude of the interaction and would consider two users who rated a different
+number of items less similar, even if the smaller set of ratings is a subset of the larger set of ratings.
 
-```{r}
-# Beispiel-Daten mit größeren Dimensionen
-set.seed(7)
-cosinus_sim_large <- matrix(runif(750^2), nrow = 750)
-
-# Melt-Funktion
-cosinus_melted_large <- melt(cosinus_sim_large)
-
-# Erstelle Heatmap mit angepassten Einstellungen
-ggplot(cosinus_melted_large, aes(Var1, Var2, fill = value)) +
-  geom_tile() +
-  scale_x_continuous(breaks = seq(1, 750, by = 50)) +
-  scale_y_continuous(breaks = seq(1, 750, by = 50)) +
-  labs(title = "Cosine Similarity Heatmap") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
-        legend.position = "right")
-```
-
+# 6.5 Produktabdeckung - Top-N Listen von IBCF und UBCF [12 Punkte]
+Aufgabe 5: Vergleiche und diskutiere Top-N Empfehlungen von IBCF und UBCF Modellen mit 30 Nachbarn
+und Cosine Similarity für den reduzierten Datensatz.
+1. Berechne die Top-15 Empfehlungen aller Testnutzer*innen via IBCF und UBCF
 
 ```{r}
-movie_labels <- rownames(cosinus_sim)
+library(recommenderlab)
 
-# Create a long-format data frame for ggplot
-cos_sim_df <- as.data.frame(as.table(cosinus_sim))
-cos_sim_df$Var1 <- factor(cos_sim_df$Var1, levels = movie_labels)
-cos_sim_df$Var2 <- factor(cos_sim_df$Var2, levels = movie_labels)
+dataFrame1 <- merged_data %>%
+  filter(user %in% top_400_users$user, item %in% top_movies$item)
 
-# Plot the heatmap
-ggplot(cos_sim_df, aes(Var1, Var2, fill = Freq)) +
-  geom_tile() +
-  scale_fill_gradient(low = "white", high = "blue") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
-  labs(title = "Cosine Similarity Matrix", x = "Movies", y = "Movies")+
-  scale_x_discrete(labels = rep("", nrow(cos_sim_df))) +
-  scale_y_discrete(labels = rep("", nrow(cos_sim_df)))
-```
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
 
-# 6.5
+evalScheme1 <- evaluationScheme(
+  matrixReduced1,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
 
-## Datensatz 400
+trainData1 <- getData(evalScheme1, "train")
+testData1 <- getData(evalScheme1, "known")
 
-Wir erstellen sowohl cosinus IBCF als auch cosinus UBCF
-```{r}
-# IBCF 15 Empfehlungen
-recmod_ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine', k = 30))
+dataFrame2 <- merged_data %>%
+  filter(user %in% top_600_users$user, item %in% top_movies$item)
 
-rec_ibcf_400 <- as(predict(recmod_ibcf_400, test_400, n =15), 'list')
+matrixReduced2 <- as(dataFrame2, "realRatingMatrix")
 
-# UBCF 15 Empfehlungen
-recmod_ubcf_400 <- Recommender(train_400, method = 'UBCF', param = list(method = 'Cosine', nn = 30))
+evalScheme2 <- evaluationScheme(
+  matrixReduced2,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
 
-rec_ubcf_400 <- as(predict(recmod_ubcf_400, test_400, n = 15), 'list') #note:  should it not be test 400? was prev train_400
+trainData2 <- getData(evalScheme2, "train")
+testData2 <- getData(evalScheme2, "known")
 
+ibcfModel <- Recommender(trainData1, method = "IBCF", param = list(k = 30, method = "Cosine"))
+ubcfModel <- Recommender(trainData1, method = "UBCF", param = list(nn = 30, method = "Cosine"))
 
-```
-
-
-```{r}
-recommended_400 <- data.frame(matrix(ncol = 17, nrow = 0))
-
-for (i in rec_ibcf_400) {
-  combined <- i
-  combined['rectype'] <- 'ibcf'
-  recommended_400 <-  rbind(recommended_400, combined)    #recommended mit ibcf und später ubcf
-  
+# Function to get top N recommendations
+getTopN <- function(model, data, n = 15) {
+  sapply(seq(nrow(data)), function(i) {
+    recs <- predict(model, newdata = data[i, ], n = n)
+    as(recs, "list")[[1]]
+  })
 }
 
-# jetzt noch ubcf dazu
-for (i in rec_ubcf_400) {
-  combined <- i
-  combined['rectype'] <- 'ubcf'
-  recommended_400 <-  rbind(recommended_400, combined)  
+# Get top 15 recommendations for all users
+top15_ibcf <- getTopN(ibcfModel, testData1)
+top15_ubcf <- getTopN(ubcfModel, testData1)
+```
+
+2. Vergleiche die Top-15 Empfehlungen von IBCF vs UBCF für drei Testnutzer*innen mittels Tabelle
+
+```{r}
+comparison_table <- data.frame(
+  # Annahme: Die Zeilen repräsentieren die Top-15 Empfehlungen
+  IBCF_User1 = top15_ibcf[1],
+  UBCF_User1 = top15_ubcf[1],
+  IBCF_User2 = top15_ibcf[2],
+  UBCF_User2 = top15_ubcf[2],
+  IBCF_User3 = top15_ibcf[3],
+  UBCF_User3 = top15_ubcf[3]
+)
+comparison_table
+```
+We do not see any intersect between the recommendations of the two models.
+
+3. Visualisiere und diskutiere für alle Testnutzer*innen summarisch die Verteilung der Top-15 Empfehlungen von IBCF und UBCF.
+```{r}
+library(recommenderlab)
+library(ggplot2)
+library(dplyr)
+
+# Function to create a data frame for plotting
+prepareForPlot <- function(recList, model) {
+  recData <- do.call(rbind, lapply(recList, function(recs, user) {
+    data.frame(User = user, Item = recs, Model = model)
+  }, user = names(recList)))
+  return(recData)
 }
 
-colnames(recommended_400) <- c(0:14, 'rectype')
+# Prepare data for plotting
+plotDataIBCF <- prepareForPlot(top15_ibcf, "IBCF")
+plotDataUBCF <- prepareForPlot(top15_ubcf, "UBCF")
 
-#resultate wieder ins pivot-long format bringen
-recommended_400_long <- recommended_400 %>% pivot_longer(cols = 0:15) %>%
-  arrange(rectype, value)
+# Combine data from both models
+combinedPlotData <- rbind(plotDataIBCF, plotDataUBCF)
+
+# Plotting the distribution of recommendations
+ggplot(combinedPlotData, aes(x = Item, fill = Model)) +
+  geom_histogram(stat = "count", position = "dodge") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Top-15 Recommendations",
+    x = "Item", y = "Count",
+    fill = "Model"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-Wir müssen nun die Movie Titel unique machen
-```{r}
-recommended_400_long$movie <- with(recommended_400_long, match(value, unique(value)))
-```
-
-wir teilen Item Based collaborative Filtering modell und 
-User Bsed Collaborative Filtering
-```{r}
-ibcf_400 <- recommended_400_long %>% filter(rectype == 'ibcf')
-ubcf_400 <- recommended_400_long %>% filter(rectype == 'ubcf')
-```
-
-Anzahl an unique Filmen bei unserem IBCF
-```{r}
-print('Das ist die Anzahl an unique Filmen in IBCF')
-print(length(unique(ibcf_400$value)))
-```
-## note to self: 
-Wie geht dies genau? Wir haben 700 filme im Datensatz. Das heisst, ein grosser Teil der Fime wird empfohlen
-
-```{r}
-ibcf_400
-```
-
-
-Anzahl an unique Filmen bei unserem UBCF
-```{r}
-print('Das ist die Anzahl an unique Filmen in UBCF')
-print(length(unique(ubcf_400$value)))
-```
-## kann hier noch etwas weiter analysieren. Z.B intersection
-
-## plots
-
-für 400 Data
-
-wir machen einen stacked plot
-```{r}
-ggplot(recommended_400_long, aes(x = movie)) + 
-  geom_histogram(bins = 400, aes(fill = rectype))
-```
-Wir können sehen, dass die meisten recommendations bei den meist recommendeted filmen von UBCF kommen. IBCF ist viel breiter verteilt.
-
-
-wir plotten die beiden Recommender getrennt
-```{r}
-ggplot(recommended_400_long) + 
-  aes(x =movie, fill = rectype) +
-  geom_histogram(bins = 600) + 
-  facet_grid(rectype ~ .) +
-  labs(x = 'Film ID', y = '#recommendations',
-       title = 'Recommendations: top_400_data') 
-```
-Wir können sehen, das es bei ubcf mehr filme gibt, welche sehr oft empfohlen wurden. Item based collaborative filtering hat wie wir zuvor gesehen haben, mehr einzigartige Filme, jedoch werden die Filme nie über 25 mal empfohlen, was man bei UBCF deutlich häufiger sieht.
+Wir können sehen, dass die meisten recommendations bei den meist recommendeted filmen von UBCF kommen.
+IBCF ist viel breiter verteilt.
+Wir können sehen, das es bei ubcf mehr filme gibt, welche sehr oft empfohlen wurden.
+Item based collaborative filtering hat wie wir zuvor gesehen haben, mehr einzigartige Filme,
+jedoch werden die Filme nie über 25 mal empfohlen, was man bei UBCF deutlich häufiger sieht.
 Dies liegt wohl daran, dass sich die USER ähnlicher sind als die ITEMS.
 
 
@@ -904,10 +1209,8 @@ wir schauen, wie die Nutzerund Filme verteilt sind.
 ```{r}
 movie_unique <- length(unique(recommended_400_long$movie))
 
-print('ANzahl an verschiedenen Filmen:')
+print("ANzahl an verschiedenen Filmen:")
 print(movie_unique)
-
-
 ```
 
 
@@ -924,28 +1227,28 @@ recommended_400_long
 
 wir nehmen einfach die ersten 3 als Vergleich, bei unserem alten recommender.
 ```{r}
-rec_ibcf_400$'0'
-rec_ubcf_400$'0'
+rec_ibcf_400$"0"
+rec_ubcf_400$"0"
 ```
 
 ```{r}
-class(rec_ubcf_400$'0')
+class(rec_ubcf_400$"0")
 ```
 
 ```{r}
 # Wähle die Top-15 Empfehlungen für die ersten drei Nutzer von IBCF
-ibcf_top15_user1 <- rec_ibcf_400$'0'[1:15]
-ibcf_top15_user2 <- rec_ibcf_400$'1'[1:15]
-ibcf_top15_user3 <- rec_ibcf_400$'2'[1:15]
+ibcf_top15_user1 <- rec_ibcf_400$"0"[1:15]
+ibcf_top15_user2 <- rec_ibcf_400$"1"[1:15]
+ibcf_top15_user3 <- rec_ibcf_400$"2"[1:15]
 
 # Wähle die Top-15 Empfehlungen für die ersten drei Nutzer von UBCF
-ubcf_top15_user1 <- rec_ubcf_400$'0'[1:15]
-ubcf_top15_user2 <- rec_ubcf_400$'1'[1:15]
-ubcf_top15_user3 <- rec_ubcf_400$'2'[1:15]
+ubcf_top15_user1 <- rec_ubcf_400$"0"[1:15]
+ubcf_top15_user2 <- rec_ubcf_400$"1"[1:15]
+ubcf_top15_user3 <- rec_ubcf_400$"2"[1:15]
 
 # Erstelle eine Vergleichstabelle
 comparison_table <- data.frame(
-   # Annahme: Die Zeilen repräsentieren die Top-15 Empfehlungen
+  # Annahme: Die Zeilen repräsentieren die Top-15 Empfehlungen
   IBCF_User1 = ibcf_top15_user1,
   UBCF_User1 = ubcf_top15_user1,
   IBCF_User2 = ibcf_top15_user2,
@@ -960,16 +1263,16 @@ print(comparison_table)
 
 Hier sind die gemeinsamen Filme
 ```{r}
-print('für user 1: ')
-print(intersect(ibcf_top15_user1,ubcf_top15_user1))
-cat('\n')
+print("für user 1: ")
+print(intersect(ibcf_top15_user1, ubcf_top15_user1))
+cat("\n")
 
-print('für user 2: ')
-print(intersect(ibcf_top15_user2,ubcf_top15_user2))
-cat('\n')
+print("für user 2: ")
+print(intersect(ibcf_top15_user2, ubcf_top15_user2))
+cat("\n")
 
-print('für user 3: ')
-print(intersect(ibcf_top15_user3,ubcf_top15_user3))
+print("für user 3: ")
+print(intersect(ibcf_top15_user3, ubcf_top15_user3))
 ```
 Wir sehen, die Recommendations von IBCF und UBCF für unsere 3 User sind fast vollständig unterschiedlich. User 1 hat 1, user 2 hat 2 und user 3 hat keine gemeinsamen Filme.
 
@@ -979,14 +1282,14 @@ Wir sehen, die Recommendations von IBCF und UBCF für unsere 3 User sind fast vo
 Als Erinnerung, hier sind unsere Recommender aus Aufgabe 5
 ```{r}
 # IBCF 15 Empfehlungen
-recmod_ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine', k = 30))
+recmod_ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(method = "Cosine", k = 30))
 
-rec_ibcf_400 <- as(predict(recmod_ibcf_400, test_400, n =15), 'list')
+rec_ibcf_400 <- as(predict(recmod_ibcf_400, testData1, n = 15), "list")
 
 # UBCF 15 Empfehlungen
-recmod_ubcf_400 <- Recommender(train_400, method = 'UBCF', param = list(method = 'Cosine', nn = 30))
+recmod_ubcf_400 <- Recommender(trainData1, method = "UBCF", param = list(method = "Cosine", nn = 30))
 
-rec_ubcf_400 <- as(predict(recmod_ubcf_400, test_400, n = 15), 'list')
+rec_ubcf_400 <- as(predict(recmod_ubcf_400, testData1, n = 15), "list")
 ```
 
 Nun können wir die Intersektion bon IBCF und UBCF für data_400 plotten.
@@ -994,19 +1297,22 @@ Nun können wir die Intersektion bon IBCF und UBCF für data_400 plotten.
 Ordinales Rating
 ```{r}
 list_ord <- unlist(names(rec_ubcf_400) %>% map(~ (sum(rec_ibcf_400[[.x]] %in%
-                                                      rec_ubcf_400[[.x]]))/ 
-                     15 * 100))
+  rec_ubcf_400[[.x]])) /
+  15 * 100))
 
 df_ord <- as.data.frame(list_ord)
-#df_ord
+# df_ord
 ```
 
 
 ```{r}
-ggplot() + geom_histogram(data = df_ord, aes(list_ord), binwidth = 1) +
-  labs(title = 'Ordinal rating: Intersection IBCF/UBCF',
-       x = 'Intersection in %',
-       y = '#Users')
+ggplot() +
+  geom_histogram(data = df_ord, aes(list_ord), binwidth = 1) +
+  labs(
+    title = "Ordinal rating: Intersection IBCF/UBCF",
+    x = "Intersection in %",
+    y = "#Users"
+  )
 ```
 
 ## noch nicht ganz fertig, weiss nicht ganz wie weiter
@@ -1022,64 +1328,67 @@ Hier vergleichen wir IBCF vs SVD
 Wir benutzen dabei die selbe vorgehensweise, wie bei aufgabe 6
 
 ```{r}
-n = 15
+n <- 15
 
-#ibcf
-recmod_ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine', k = 30))
+# ibcf
+recmod_ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(method = "Cosine", k = 30))
 
-rec_ibcf_400 <- as(predict(recmod_ibcf_400, test_400, n = n), 'list')
-
-
-
-#svd 10
-
-recmod_svd_400_10 <- Recommender(train_400, method = 'SVD', param = list(k = 10))
-rec_svd_400_10 <- as(predict(recmod_svd_400_10, test_400, n = n), 'list')
+rec_ibcf_400 <- as(predict(recmod_ibcf_400, testData1, n = n), "list")
 
 
 
+# svd 10
 
-#svd 20
+recmod_svd_400_10 <- Recommender(trainData1, method = "SVD", param = list(k = 10))
+rec_svd_400_10 <- as(predict(recmod_svd_400_10, testData1, n = n), "list")
 
-recmod_svd_400_20 <- Recommender(train_400, method = 'SVD', param = list(k = 20))
-rec_svd_400_20 <- as(predict(recmod_svd_400_20, test_400, n = n), 'list')
+
+
+
+# svd 20
+
+recmod_svd_400_20 <- Recommender(trainData1, method = "SVD", param = list(k = 20))
+rec_svd_400_20 <- as(predict(recmod_svd_400_20, testData1, n = n), "list")
 
 
 
 # svd 30
-recmod_svd_400_30 <- Recommender(train_400, method = 'SVD', param = list(k = 30))
-rec_svd_400_30 <- as(predict(recmod_svd_400_30, test_400, n = n), 'list')
+recmod_svd_400_30 <- Recommender(trainData1, method = "SVD", param = list(k = 30))
+rec_svd_400_30 <- as(predict(recmod_svd_400_30, testData1, n = n), "list")
 
 
 # svd 40
-recmod_svd_400_40 <- Recommender(train_400, method = 'SVD', param = list(k = 40))
-rec_svd_400_40 <- as(predict(recmod_svd_400_40, test_400, n = n), 'list')
+recmod_svd_400_40 <- Recommender(trainData1, method = "SVD", param = list(k = 40))
+rec_svd_400_40 <- as(predict(recmod_svd_400_40, testData1, n = n), "list")
 
 
 # svd 50
-recmod_svd_400_50 <- Recommender(train_400, method = 'SVD', param = list(k = 50))
-rec_svd_400_50 <- as(predict(recmod_svd_400_50, test_400, n = n), 'list')
+recmod_svd_400_50 <- Recommender(trainData1, method = "SVD", param = list(k = 50))
+rec_svd_400_50 <- as(predict(recmod_svd_400_50, testData1, n = n), "list")
 ```
 
 
 ```{r}
+svd10reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_10[[.x]]
+)) / 15 * 100))
 
 
-svd10reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
-  rec_ibcf_400[[.x]] %in% rec_svd_400_10[[.x]]))/ 15 * 100))            
+svd20reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_20[[.x]]
+)) / 15 * 100))
 
+svd30reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_30[[.x]]
+)) / 15 * 100))
 
-svd20reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
-  rec_ibcf_400[[.x]] %in%  rec_svd_400_20[[.x]]))/ 15 * 100)) 
+svd40reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_40[[.x]]
+)) / 15 * 100))
 
-svd30reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
-  rec_ibcf_400[[.x]] %in%  rec_svd_400_30[[.x]]))/ 15 * 100))
-
-svd40reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
-  rec_ibcf_400[[.x]] %in%  rec_svd_400_40[[.x]]))/ 15 * 100))
-
-svd50reclist <- unlist(names(recmod_ibcf_400) %>% map( ~(sum(
-  rec_ibcf_400[[.x]] %in%  rec_svd_400_50[[.x]]))/ 15 * 100))
+svd50reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_50[[.x]]
+)) / 15 * 100))
 
 # dataframes
 df_svd_400_10 <- as.data.frame(svd10reclist)
@@ -1090,7 +1399,7 @@ df_svd_400_50 <- as.data.frame(svd10reclist)
 ```
 
 ```{r}
-#better version of above
+# better version of above
 # Funktion für die Berechnung der Überschneidung
 calculate_overlap <- function(rec_ibcf, rec_svd, n) {
   names(rec_ibcf) %>% map(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100)
@@ -1109,28 +1418,27 @@ df_svd_400_20 <- as.data.frame(svd20reclist)
 df_svd_400_30 <- as.data.frame(svd30reclist)
 df_svd_400_40 <- as.data.frame(svd40reclist)
 df_svd_400_50 <- as.data.frame(svd50reclist)
-
 ```
 
 
 ```{r}
-#einschub, sollte so funktionieren
+# einschub, sollte so funktionieren
 
 # Create a function to calculate overlap
 calculate_overlap <- function(rec_ibcf, rec_svd, n, model_name) {
   data.frame(
-    val = names(rec_ibcf) %>% 
+    val = names(rec_ibcf) %>%
       map_dbl(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100),
     model = model_name
   )
 }
 
 # Calculate overlap for different SVD configurations
-df_svd_400_10 <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15, 'SVD 10')
-df_svd_400_20 <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15, 'SVD 20')
-df_svd_400_30 <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15, 'SVD 30')
-df_svd_400_40 <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15, 'SVD 40')
-df_svd_400_50 <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15, 'SVD 50')
+df_svd_400_10 <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15, "SVD 10")
+df_svd_400_20 <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15, "SVD 20")
+df_svd_400_30 <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15, "SVD 30")
+df_svd_400_40 <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15, "SVD 40")
+df_svd_400_50 <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15, "SVD 50")
 
 # Bind the data frames together
 different_SVD <- bind_rows(
@@ -1141,17 +1449,22 @@ different_SVD <- bind_rows(
 
 Wir können an unserer Tabelle sehen, das bei der Intersektion sich zwischen den SVD Modellen sich nicht wirklich etwas verändert.
 ```{r}
-different_SVD%>% group_by(model)%>%summarise(mean(val))
+different_SVD %>%
+  group_by(model) %>%
+  summarise(mean(val))
 ```
 
 Nun plotten wir das ganze noch, um es visuell darzustellen.
 Es sieht bei allen ziemlich ähnlich aus. Es gibt fast keine Unterschiede.
 ```{r}
-ggplot() + geom_histogram(data = different_SVD, aes(val, fill = model), binwidth = 1) +
-  facet_wrap(.~model) +
-  labs(x = 'Intersections in %',
-       y = '#Users',
-       title = 'Intersections of IBCF and various SVD')
+ggplot() +
+  geom_histogram(data = different_SVD, aes(val, fill = model), binwidth = 1) +
+  facet_wrap(. ~ model) +
+  labs(
+    x = "Intersections in %",
+    y = "#Users",
+    title = "Intersections of IBCF and various SVD"
+  )
 ```
 
 # 6.8
@@ -1162,17 +1475,16 @@ Die Coverage-Funktion  misst, welchen Anteil der verfügbaren Elemente durch die
 
 first we need the data
 ```{r}
-#data <- movie_data
+# data <- movie_data
 ```
 
 ```{r}
 cover <- function(N, data, rectype) {
-  list_rec <- as(predict(rectype, data, n = N), 'list') #right prob
-  unl <- unlist(unlist(names(list_rec)) %>% map( ~(list_rec[[.x]])))
+  list_rec <- as(predict(rectype, data, n = N), "list") # right prob
+  unl <- unlist(unlist(names(list_rec)) %>% map(~ (list_rec[[.x]])))
   length <- length(unique(movie_data$item))
-  
-  length(unique(unl))/length
-  
+
+  length(unique(unl)) / length
 }
 ```
 
@@ -1187,21 +1499,21 @@ Die novelty Funktion berechnet die "Novelty" (Neuheit) eines Empfehlungssystems.
 ```{r}
 novelty <- function(N, data, rectype) {
   rating_n <- nrow(merged_data %>% group_by(item) %>% count())
-  popularity <- merged_data %>% group_by(item) %>% count()
+  popularity <- merged_data %>%
+    group_by(item) %>%
+    count()
   popularity$n <- popularity$n / rating_n
   total <- list(0)
   recomlist <- as(predict(rectype, data, n = N), "list")
-  
+
   for (i in 1:nrow(data)) {
     tmp <- merge(x = recomlist[[i]], y = popularity) %>% filter(x == item)
     sum <- -sum(log2(tmp$n)) / N
     total <- rbind(total, sum)
   }
-  
+
   Reduce("+", total) / length(recomlist)
 }
-
-
 ```
 
 
@@ -1210,21 +1522,22 @@ Plotten für data_400 mithilfe von IBCF
 Zuerst erstellen wir die Metriken.
 ```{r}
 # ibcf_400 was defined earlier, so it commented out
-ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine',
-                                                                 k = 30))
+ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(
+  method = "Cosine",
+  k = 30
+))
 
 cvals400 <- c()
 nvals400 <- c()
 
 for (obs in seq(5, 30, 5)) {
-  cv <- cover(obs, test_400, ibcf_400)
-  nv <- novelty(obs, test_400, ibcf_400)
-  
-  #add it to list
+  cv <- cover(obs, testData1, ibcf_400)
+  nv <- novelty(obs, testData1, ibcf_400)
+
+  # add it to list
   cvals400 <- rbind(cvals400, cv)
   nvals400 <- rbind(nvals400, nv)
 }
-
 ```
 
 
@@ -1234,8 +1547,8 @@ now we create the plot
 ```{r}
 metrics <- cbind(as.data.frame(cvals400), as.data.frame(nvals400))
 
-colnames(metrics)[1] <- 'coverage'
-colnames(metrics)[2] <- 'Novelty'
+colnames(metrics)[1] <- "coverage"
+colnames(metrics)[2] <- "Novelty"
 ```
 
 
@@ -1250,10 +1563,12 @@ Wir plotten es.
 # Create a scatterplot with different colors for N values
 ggplot(metrics, aes(x = Novelty, y = coverage, color = factor(xvalues))) +
   geom_point(size = 3) +
-  labs(title = "Scatterplot of Novelty vs Coverage",
-       x = "Novelty",
-       y = "Coverage",
-       color = "N Values") +
+  labs(
+    title = "Scatterplot of Novelty vs Coverage",
+    x = "Novelty",
+    y = "Coverage",
+    color = "N Values"
+  ) +
   scale_color_manual(values = c("5" = "blue", "10" = "green", "15" = "red", "20" = "purple", "25" = "orange", "30" = "pink")) +
   theme_minimal()
 ```
@@ -1265,19 +1580,21 @@ dass die coverage stetig steigt.
 Nun machen wir noch dasselbe für svd
 
 ```{r}
-ibcf_400 <- Recommender(train_400, method = 'IBCF', param = list(method = 'Cosine',
-                                                                 k = 30))
-svd_400 <- Recommender(train_400, method = 'SVD', param = list(k = 30))
+ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(
+  method = "Cosine",
+  k = 30
+))
+svd_400 <- Recommender(trainData1, method = "SVD", param = list(k = 30))
 
 
 cvals400 <- c()
 nvals400 <- c()
 
 for (obs in seq(5, 30, 5)) {
-  cv <- cover(obs, test_400, svd_400)
-  nv <- novelty(obs, test_400, svd_400)
-  
-  #add it to list
+  cv <- cover(obs, testData1, svd_400)
+  nv <- novelty(obs, testData1, svd_400)
+
+  # add it to list
   cvals400 <- rbind(cvals400, cv)
   nvals400 <- rbind(nvals400, nv)
 }
@@ -1285,8 +1602,8 @@ for (obs in seq(5, 30, 5)) {
 
 smetrics <- cbind(as.data.frame(cvals400), as.data.frame(nvals400))
 
-colnames(smetrics)[1] <- 'coverage'
-colnames(smetrics)[2] <- 'Novelty'
+colnames(smetrics)[1] <- "coverage"
+colnames(smetrics)[2] <- "Novelty"
 
 smetrics$xvalues <- c(5, 10, 15, 20, 25, 30)
 smetrics
@@ -1298,10 +1615,12 @@ Nun plotten wir die System-Metriken als Scatterplot “Novelty vs Coverage” f�
 # Create a scatterplot with different colors for N values
 ggplot(smetrics, aes(x = Novelty, y = coverage, color = factor(xvalues))) +
   geom_point(size = 3) +
-  labs(title = "Scatterplot of Novelty vs Coverage (SVD)",
-       x = "Novelty",
-       y = "Coverage",
-       color = "N Values") +
+  labs(
+    title = "Scatterplot of Novelty vs Coverage (SVD)",
+    x = "Novelty",
+    y = "Coverage",
+    color = "N Values"
+  ) +
   scale_color_manual(values = c("5" = "blue", "10" = "green", "15" = "red", "20" = "purple", "25" = "orange", "30" = "pink")) +
   theme_minimal()
 ```
@@ -1352,23 +1671,34 @@ UBCF mit Pearson-Ähnlichkeit: Analog zu IBCF, aber für Benutzer statt Elemente
 
 
 ```{r}
-top_400_scheme <- evaluationScheme(rrm_400, goodRating = gR,
-                                   method = 'cross-validation',
-                                   k = 10, given = 20)
-
-approaches <- list('Popular movies' = list(name = 'POPULAR', param = NULL),
-                   'SVD' = list(name = 'SVD', param = list(k = 10)),
-                   'IBCF cosinus' = list(name = 'IBCF', 
-                                         param = list(method ='Cosine', k = 10)),
-                   'IBCF Pearson' = list(name = 'IBCF', 
-                                          param = list(method ='Pearson', k = 10)),
-                   'UBCF cosinus' = list(name = 'UBCF', 
-                                          param = list(method ='Cosine', k = 10)),
-                   'UBCF Pearson' = list(name = 'UBCF', 
-                                          param = list(method ='Pearson', k = 10))
+top_400_scheme <- evaluationScheme(rrm_400,
+  goodRating = gR,
+  method = "cross-validation",
+  k = 10, given = 20
 )
 
-steps <- c(10,15,20,25,30)
+approaches <- list(
+  "Popular movies" = list(name = "POPULAR", param = NULL),
+  "SVD" = list(name = "SVD", param = list(k = 10)),
+  "IBCF cosinus" = list(
+    name = "IBCF",
+    param = list(method = "Cosine", k = 10)
+  ),
+  "IBCF Pearson" = list(
+    name = "IBCF",
+    param = list(method = "Pearson", k = 10)
+  ),
+  "UBCF cosinus" = list(
+    name = "UBCF",
+    param = list(method = "Cosine", k = 10)
+  ),
+  "UBCF Pearson" = list(
+    name = "UBCF",
+    param = list(method = "Pearson", k = 10)
+  )
+)
+
+steps <- c(10, 15, 20, 25, 30)
 ```
 
 Jetzt plotten wir die 5 Modelle für data_400
@@ -1388,10 +1718,12 @@ FPR ist der Anteil der tatsächlich negativen Instanzen, die vom Modell fälschl
   FP (False Positive): Anzahl der falsch als positiv vorhergesagten Instanzen.
   TN (True Negative): Anzahl der korrekt als negativ vorhergesagten Instanzen.
 ```{r}
-comparemod400 <- evaluate(top_400_scheme, approaches,n = steps, type = 'topNList',
-                          progress = FALSE)
+comparemod400 <- evaluate(top_400_scheme, approaches,
+  n = steps, type = "topNList",
+  progress = FALSE
+)
 
-plot(comparemod400,  avg = TRUE, lty = 1, annotate = 1, legend = 'topleft')
+plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
 
 Unser SVD Modell ist klar das beste Modell. Doch vielleicht lässt sich das SVD Modell
@@ -1405,55 +1737,85 @@ Der Standardwert von lambda ist 0.001
 ## 6.9.4 Hyperparameter
 Experimentieren mit gamna:
 ```{r}
-top_400_scheme <- evaluationScheme(rrm_400, goodRating = gR,
-                                   method = 'cross-validation',
-                                   k = 10, given = 20)
-approaches <- list('Popular movies' = list(name = 'POPULAR', param = NULL),
-                   'SVD gamma 0.005' = list(name = 'SVD', 
-                                           param = list(k = 10, gamma = 0.005)),
-                   'SVD gamma 0.010' = list(name = 'SVD', 
-                                           param = list(k = 10, gamma = 0.010)),
-                   'SVD gamma def(0.015)' = list(name = 'SVD', 
-                                                param = list(k = 10, gamma = 0.015)),
-                   'SVD gamma 0.020' = list(name = 'SVD', 
-                                           param = list(k = 10, gamma = 0.020)),
-                   'SVD gamma 0.025' = list(name = 'SVD', 
-                                           param = list(k = 10, gamma = 0.025)),
-                   'SVD gamma 0.5' = list(name = 'SVD',
-                                          param = list(k = 10, gamma = 0.5))
+top_400_scheme <- evaluationScheme(rrm_400,
+  goodRating = gR,
+  method = "cross-validation",
+  k = 10, given = 20
+)
+approaches <- list(
+  "Popular movies" = list(name = "POPULAR", param = NULL),
+  "SVD gamma 0.005" = list(
+    name = "SVD",
+    param = list(k = 10, gamma = 0.005)
+  ),
+  "SVD gamma 0.010" = list(
+    name = "SVD",
+    param = list(k = 10, gamma = 0.010)
+  ),
+  "SVD gamma def(0.015)" = list(
+    name = "SVD",
+    param = list(k = 10, gamma = 0.015)
+  ),
+  "SVD gamma 0.020" = list(
+    name = "SVD",
+    param = list(k = 10, gamma = 0.020)
+  ),
+  "SVD gamma 0.025" = list(
+    name = "SVD",
+    param = list(k = 10, gamma = 0.025)
+  ),
+  "SVD gamma 0.5" = list(
+    name = "SVD",
+    param = list(k = 10, gamma = 0.5)
+  )
 )
 
-comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = 'topNList',progress = FALSE)
+comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = "topNList", progress = FALSE)
 
-plot(comparemod400,  avg = TRUE, lty = 1, annotate = 1, legend = 'topleft')
+plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
 Alle gamma scheinen aufeinander zu liegen. Der hyperparameter gamma scheint nicht wichtig zu sein.
 
 
 Experimentieren mit lambda:
 ```{r}
-top_400_scheme <- evaluationScheme(rrm_400, goodRating = gR,
-                                   method = 'cross-validation',
-                                   k = 10, given = 20)
-
-approaches <- list('Popular movies' = list(name = 'POPULAR', param = NULL),
-                   'SVD lambda 0.0001' = list(name = 'SVD', 
-                                           param = list(k = 10, lambda = 0.0001)),
-                   'SVD lambda def(0.001)' = list(name = 'SVD', 
-                                           param = list(k = 10, lambda = 0.001)),
-                   'SVD lambda 0.002' = list(name = 'SVD', 
-                                                param = list(k = 10, lambda = 0.002)),
-                   'SVD lambda 0.005' = list(name = 'SVD', 
-                                           param = list(k = 10, lambda = 0.005)),
-                   'SVD lambda 0.01' = list(name = 'SVD', 
-                                           param = list(k = 10, lambda = 0.01)),
-                   'SVD lambda 0.02' = list(name = 'SVD',
-                                          param = list(k = 10, lambda = 0.02))
+top_400_scheme <- evaluationScheme(rrm_400,
+  goodRating = gR,
+  method = "cross-validation",
+  k = 10, given = 20
 )
 
-comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = 'topNList',progress = FALSE)
+approaches <- list(
+  "Popular movies" = list(name = "POPULAR", param = NULL),
+  "SVD lambda 0.0001" = list(
+    name = "SVD",
+    param = list(k = 10, lambda = 0.0001)
+  ),
+  "SVD lambda def(0.001)" = list(
+    name = "SVD",
+    param = list(k = 10, lambda = 0.001)
+  ),
+  "SVD lambda 0.002" = list(
+    name = "SVD",
+    param = list(k = 10, lambda = 0.002)
+  ),
+  "SVD lambda 0.005" = list(
+    name = "SVD",
+    param = list(k = 10, lambda = 0.005)
+  ),
+  "SVD lambda 0.01" = list(
+    name = "SVD",
+    param = list(k = 10, lambda = 0.01)
+  ),
+  "SVD lambda 0.02" = list(
+    name = "SVD",
+    param = list(k = 10, lambda = 0.02)
+  )
+)
 
-plot(comparemod400,  avg = TRUE, lty = 1, annotate = 1, legend = 'topleft')
+comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = "topNList", progress = FALSE)
+
+plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
 
 Wir sehen wieder keinen Unterschied, egal wie sehr wir die Parameter anpassen.
