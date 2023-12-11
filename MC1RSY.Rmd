@@ -1159,123 +1159,71 @@ comparison_table <- data.frame(
   UBCF_User3 = top15_ubcf[3]
 )
 comparison_table
-```
-We do not see any intersect between the recommendations of the two models.
 
-3. Visualisiere und diskutiere für alle Testnutzer*innen summarisch die Verteilung der Top-15 Empfehlungen von IBCF und UBCF.
-```{r}
-library(recommenderlab)
-library(ggplot2)
-library(dplyr)
-
-# Function to create a data frame for plotting
-prepareForPlot <- function(recList, model) {
-  recData <- do.call(rbind, lapply(recList, function(recs, user) {
-    data.frame(User = user, Item = recs, Model = model)
-  }, user = names(recList)))
-  return(recData)
-}
-
-# Prepare data for plotting
-plotDataIBCF <- prepareForPlot(top15_ibcf, "IBCF")
-plotDataUBCF <- prepareForPlot(top15_ubcf, "UBCF")
-
-# Combine data from both models
-combinedPlotData <- rbind(plotDataIBCF, plotDataUBCF)
-
-# Plotting the distribution of recommendations
-ggplot(combinedPlotData, aes(x = Item, fill = Model)) +
-  geom_histogram(stat = "count", position = "dodge") +
-  theme_minimal() +
-  labs(
-    title = "Distribution of Top-15 Recommendations",
-    x = "Item", y = "Count",
-    fill = "Model"
-  ) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-Wir können sehen, dass die meisten recommendations bei den meist recommendeted filmen von UBCF kommen.
-IBCF ist viel breiter verteilt.
-Wir können sehen, das es bei ubcf mehr filme gibt, welche sehr oft empfohlen wurden.
-Item based collaborative filtering hat wie wir zuvor gesehen haben, mehr einzigartige Filme,
-jedoch werden die Filme nie über 25 mal empfohlen, was man bei UBCF deutlich häufiger sieht.
-Dies liegt wohl daran, dass sich die USER ähnlicher sind als die ITEMS.
-
-
-## 6.5.2      3 Nutzer
-
-wir schauen, wie die Nutzerund Filme verteilt sind.
-```{r}
-movie_unique <- length(unique(recommended_400_long$movie))
-
-print("ANzahl an verschiedenen Filmen:")
-print(movie_unique)
-```
-
-
-
- 3 Testnutzer
-```{r}
-ibcf_400
-```
-Zuvor, haben wir die Nutzer vernachlässigt. Wir können sowohl bei IBCF als auch bei UBCF  nicht sehen, von welchem User sie kommen. Das müssen wir ändern.
-
-```{r}
-recommended_400_long
-```
-
-wir nehmen einfach die ersten 3 als Vergleich, bei unserem alten recommender.
-```{r}
-rec_ibcf_400$"0"
-rec_ubcf_400$"0"
-```
-
-```{r}
-class(rec_ubcf_400$"0")
-```
-
-```{r}
-# Wähle die Top-15 Empfehlungen für die ersten drei Nutzer von IBCF
-ibcf_top15_user1 <- rec_ibcf_400$"0"[1:15]
-ibcf_top15_user2 <- rec_ibcf_400$"1"[1:15]
-ibcf_top15_user3 <- rec_ibcf_400$"2"[1:15]
-
-# Wähle die Top-15 Empfehlungen für die ersten drei Nutzer von UBCF
-ubcf_top15_user1 <- rec_ubcf_400$"0"[1:15]
-ubcf_top15_user2 <- rec_ubcf_400$"1"[1:15]
-ubcf_top15_user3 <- rec_ubcf_400$"2"[1:15]
-
-# Erstelle eine Vergleichstabelle
-comparison_table <- data.frame(
-  # Annahme: Die Zeilen repräsentieren die Top-15 Empfehlungen
-  IBCF_User1 = ibcf_top15_user1,
-  UBCF_User1 = ubcf_top15_user1,
-  IBCF_User2 = ibcf_top15_user2,
-  UBCF_User2 = ubcf_top15_user2,
-  IBCF_User3 = ibcf_top15_user3,
-  UBCF_User3 = ubcf_top15_user3
-)
-
-# Gib die Vergleichstabelle aus
-print(comparison_table)
-```
-
-Hier sind die gemeinsamen Filme
-```{r}
 print("für user 1: ")
-print(intersect(ibcf_top15_user1, ubcf_top15_user1))
+print(intersect(top15_ibcf[1], top15_ubcf[1]))
 cat("\n")
 
 print("für user 2: ")
-print(intersect(ibcf_top15_user2, ubcf_top15_user2))
+print(intersect(top15_ibcf[2], top15_ubcf[2]))
 cat("\n")
 
 print("für user 3: ")
-print(intersect(ibcf_top15_user3, ubcf_top15_user3))
+print(intersect(top15_ibcf[3], top15_ubcf[3]))
 ```
-Wir sehen, die Recommendations von IBCF und UBCF für unsere 3 User sind fast vollständig unterschiedlich. User 1 hat 1, user 2 hat 2 und user 3 hat keine gemeinsamen Filme.
+We do not see any intersect between the recommendations of the two models.
 
+3. Visualisiere und diskutiere für alle Testnutzer*innen summarisch die 
+   Verteilung der Top-15 Empfehlungen von IBCF und UBCF.
+```{r}
+# Assuming 'top15_ibcf' and 'top15_ubcf' are lists of character vectors containing movie titles
+# Let's first combine all recommendations into a single vector for each method
+all_ibcf <- unlist(top15_ibcf)
+all_ubcf <- unlist(top15_ubcf)
+
+# Create a table of frequencies for each set of recommendations
+freq_ibcf <- table(all_ibcf)
+freq_ubcf <- table(all_ubcf)
+
+# Convert the tables to data frames for plotting
+df_ibcf <- as.data.frame(freq_ibcf)
+df_ubcf <- as.data.frame(freq_ubcf)
+
+# Rename the columns for clarity
+names(df_ibcf) <- c("Movie", "IBCF_Count")
+names(df_ubcf) <- c("Movie", "UBCF_Count")
+
+# Merge the two data frames by movie titles
+df_combined <- merge(df_ibcf, df_ubcf, by = "Movie", all = TRUE)
+
+# Replace NAs with zeros
+df_combined[is.na(df_combined)] <- 0
+
+# Now we can plot the comparison using ggplot2
+library(ggplot2)
+
+# Creating a melted version of the dataframe for ggplot2
+df_melted <- reshape2::melt(df_combined, id.vars = "Movie")
+
+# Plotting
+ggplot(data = df_melted, aes(x = Movie, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Movie", y = "Recommendation Count", fill = "Method") +
+  ggtitle("Distribution of Movie Recommendations: IBCF vs. UBCF") + 
+  theme(axis.text.x = element_blank())
+```
+In the graph we see the distribution for both recommenders recommending different movies.
+For example, UBCF recommends a movie very frequently (far left in the graph), while the IBCF recommendation program does not. On the far right,
+we see a lot of movies that are only recommended by UBCF and not by IBCF.
+
+UBCF algorithms make recommendations based on the similarity of user interaction patterns.
+If a group of users has interacted with a certain set of movies that is not widely popular or rated by other users,
+UBCF can still recommend these movies to similar users.
+
+UBCF is typically better at capturing the "long tail" of less popular items.
+This means it can recommend movies that have been rated by a small number of similar users,
+while IBCF might miss these if the items themselves dont have enough interactions to establish strong item-item similarities.
 
 # 6.6
 
