@@ -939,7 +939,7 @@ getJaccardSim <- function(M) {
 ```
 
 ```{r}
-set.seed(7)
+set.seed(42)
 index <- sort(sample(1:nrow(MovieLense), 100)) # wähle 100 zufällige Filme
 oursample <- MovieLense[index]
 # reguläre Werte Matrix
@@ -1210,7 +1210,7 @@ ggplot(data = df_melted, aes(x = Movie, y = value, fill = variable)) +
   geom_bar(stat = "identity", position = "dodge") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(x = "Movie", y = "Recommendation Count", fill = "Method") +
-  ggtitle("Distribution of Movie Recommendations: IBCF vs. UBCF") + 
+  ggtitle("Distribution of Movie Recommendations: IBCF vs. UBCF") +
   theme(axis.text.x = element_blank())
 ```
 In the graph we see the distribution for both recommenders recommending different movies.
@@ -1225,48 +1225,235 @@ UBCF is typically better at capturing the "long tail" of less popular items.
 This means it can recommend movies that have been rated by a small number of similar users,
 while IBCF might miss these if the items themselves dont have enough interactions to establish strong item-item similarities.
 
-# 6.6
-
-Als Erinnerung, hier sind unsere Recommender aus Aufgabe 5
-```{r}
-# IBCF 15 Empfehlungen
-recmod_ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(method = "Cosine", k = 30))
-
-rec_ibcf_400 <- as(predict(recmod_ibcf_400, testData1, n = 15), "list")
-
-# UBCF 15 Empfehlungen
-recmod_ubcf_400 <- Recommender(trainData1, method = "UBCF", param = list(method = "Cosine", nn = 30))
-
-rec_ubcf_400 <- as(predict(recmod_ubcf_400, testData1, n = 15), "list")
-```
-
-Nun können wir die Intersektion bon IBCF und UBCF für data_400 plotten.
-
-Ordinales Rating
-```{r}
-list_ord <- unlist(names(rec_ubcf_400) %>% map(~ (sum(rec_ibcf_400[[.x]] %in%
-  rec_ubcf_400[[.x]])) /
-  15 * 100))
-
-df_ord <- as.data.frame(list_ord)
-# df_ord
-```
-
+# 6.6 Personalisierte Empfehlungen - Top-N Listen von IBCF und UBCF [16 Punkte]
+Aufgabe 6: Untersuche den Einfluss von Ratings und Modelltyp auf Top-N Empfehlungen für den reduzierten Datensatz
+und vergleiche die Empfehlungen über alle Testnutzerinnen in den Top-15 Listen,
+wenn Modelltyp und Rating verändert werden. Vergleiche die Verteilung übereinstimmender Empfehlungen
+aller Testnutzerinnen in den Top-15 Listen für,
+1. IBCF vs UBCF, beide mit ordinalen Ratings und Cosine Similarity,
+Hinweise: 
+Diese Aufgabe ist eine Fortsetzung von Aufgabe 5.
+Gefordert ist eine vergleichende, statistische Analyse inklusive Visualisierung.
+Der erste Schritt dabei ist die Übereinstimmung der Empfehlungen pro Nutzer*in zu untersuchen. 
+Implementiere eine Funktion für die Überprüfung der Übereinstimmung von Empfehlungen
 
 ```{r}
-ggplot() +
-  geom_histogram(data = df_ord, aes(list_ord), binwidth = 1) +
-  labs(
-    title = "Ordinal rating: Intersection IBCF/UBCF",
-    x = "Intersection in %",
-    y = "#Users"
-  )
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
+evaluationScheme <- evaluationScheme(matrixReduced1, method = "split", train = 0.8, given = 5, goodRating = 4)
+trainSet <- getData(evaluationScheme, "train")
+testSet <- getData(evaluationScheme, "known")
 ```
 
-## noch nicht ganz fertig, weiss nicht ganz wie weiter
+```{r}
+ibcf <- Recommender(trainSet, "IBCF", param = list(k = 30, method = "cosine"))
+ibcf
+
+ubcf <- Recommender(testSet, "UBCF", param = list(nn = 30, method = "cosine"))
+ubcf
+```
+
+```{r}
+ibcfTopNList <- predict(ibcf, testSet, n = 15)
+ibcfTopNList
+
+ubcfTopNList <- predict(ubcf, testSet, n = 15)
+ubcfTopNList
+```
+
+```{r}
+getTopNdataFrame <- function(topNList) {
+  counts <- table(unlist(as.array(as(topNList, "list"))))
+  df <- data.frame(Movie = names(counts), Count = unname(counts)) %>%
+    select("Movie", "Count.Freq") %>%
+    rename("Count" = "Count.Freq") %>%
+    arrange(desc(Count))
+  df
+}
+
+ibcfTopNdataFrame <- getTopNdataFrame(ibcfTopNList)
+ibcfTopNdataFrame
+
+ubcfTopNdataFrame <- getTopNdataFrame(ubcfTopNList)
+ubcfTopNdataFrame
+```
+
+```{r}
+library(dplyr)
+compareModels <- function(ibcf, ubcf) {
+  stopifnot(is.data.frame(ibcf))
+  stopifnot(is.data.frame(ubcf))
+  print(paste("Recommendations IBCF:", nrow(ibcf)))
+  print(paste("Recommendations UBCF:", nrow(ubcf)))
+
+  intersect_ <- intersect(ibcf$Movie, ubcf$Movie)
+  
+  print(paste("Similar recommendations:", length(intersect_)))
+  print(paste("Proportion IBCF:", length(intersect_) / nrow(ibcf) * 100))
+  print(paste("Proportion UBCF:", length(intersect_) / nrow(ubcf) * 100))
+}
+
+print("First Reduction without Normalization")
+compareModels(ibcfTopNdataFrame, ubcfTopNdataFrame)
+```
+
+```{r}
+set.seed(42)
+matrixReduced2 <- as(dataFrame2, "realRatingMatrix")
+evaluationScheme2 <- evaluationScheme(matrixReduced2, method = "split", train = 0.8, given = 5, goodRating = 4)
+trainSet2 <- getData(evaluationScheme2, "train")
+testSet2 <- getData(evaluationScheme2, "known")
+```
+
+```{r}
+ibcf2 <- Recommender(trainSet2, "IBCF", param = list(k = 30, method = "cosine"))
+ibcf2
+
+ubcf2 <- Recommender(testSet2, "UBCF", param = list(nn = 30, method = "cosine"))
+ubcf2
+```
+
+```{r}
+ibcfTopNList2 <- predict(ibcf, testSet, n = 15)
+ibcfTopNList2
+
+ubcfTopNList2 <- predict(ubcf, testSet, n = 15)
+ubcfTopNList2
+```
+
+```{r}
+getTopNdataFrame <- function(topNList) {
+  counts <- table(unlist(as.array(as(topNList, "list"))))
+  df <- data.frame(Movie = names(counts), Count = unname(counts)) %>%
+    select("Movie", "Count.Freq") %>%
+    rename("Count" = "Count.Freq") %>%
+    arrange(desc(Count))
+  df
+}
+
+ibcfTopNdataFrame2 <- getTopNdataFrame(ibcfTopNList2)
+ibcfTopNdataFrame2
+
+ubcfTopNdataFrame2 <- getTopNdataFrame(ubcfTopNList2)
+ubcfTopNdataFrame2
+```
+
+```{r}
+library(dplyr)
+compareModels <- function(ibcf, ubcf) {
+  stopifnot(is.data.frame(ibcf))
+  stopifnot(is.data.frame(ubcf))
+  print(paste("Recommendations IBCF:", nrow(ibcf)))
+  print(paste("Recommendations UBCF:", nrow(ubcf)))
+
+  intersect_ <- intersect(ibcf$Movie, ubcf$Movie)
+  
+  print(paste("Similar recommendations:", length(intersect_)))
+  print(paste("Proportion IBCF:", length(intersect_) / nrow(ibcf) * 100))
+  print(paste("Proportion UBCF:", length(intersect_) / nrow(ubcf) * 100))
+}
+
+print("First Reduction without Normalization")
+compareModels(ibcfTopNdataFrame2, ubcfTopNdataFrame2)
+```
+First Reduction Set:
+IBCF recommends 380 movies.
+UBCF recommends 218 movies.
+The intersect between both recommenders for the first reduced dataset is 119 movies.
+The relative intersect for IBCF is 31% and for UBCF it is 55%.
+
+Second Reduction Set:
+IBCF recommends 380 movies.
+UBCF recommends 218 movies.
+The intersect between both recommenders for the first reduced dataset is 119 movies.
+The relative intersect for IBCF is 31% and for UBCF it is 55%.
+#TODO
+We see that the intersect is lower than before because we have fewer user ratings to work with.
+
+Both methods are not giving similar recommendations.
+IBCF and UBCF rely on different aspects of the data.
+IBCF measures similarities between items based on user interactions,
+while UBCF measures similarities between users based on their interactions with items.
+The different focus can lead to different sets of recommendations.
+
+2. IBCF vs UBCF, beide mit ordinalen, normalisierten Ratings und Cosine Similarity.
+
+```{r}
+dataFrame1Norm <- dataFrame1
+dataFrame1Norm$rating <- scale(dataFrame1$rating)
+# test that the ratings have mean 0 and sd 1
+test_that("ratings have mean 0 and sd 1", {
+  expect_equal(mean(dataFrame1Norm$rating), 0)
+  expect_equal(sd(dataFrame1Norm$rating), 1)
+})
+```
+
+```{r}
+set.seed(42)
+matrixReduced1Norm <- as(dataFrame1Norm, "realRatingMatrix")
+evaluationScheme <- evaluationScheme(matrixReduced1Norm, method = "split", train = 0.8, given = 5, goodRating = 4)
+trainSetNorm <- getData(evaluationScheme, "train")
+testSetNorm <- getData(evaluationScheme, "known")
+```
+
+```{r}
+ibcfNorm <- Recommender(trainSet, "IBCF", param=list(k= 30, method = "cosine"))
+ibcfNorm
+
+ubcfNorm <- Recommender(testSet, "UBCF", param=list(nn= 30, method = "cosine"))
+ubcfNorm
+```
+
+```{r}
+ibcfTopNListNorm <- predict(ibcfNorm, testSetNorm, n=15)
+ibcfTopNListNorm
+
+ubcfTopNListNorm <- predict(ubcfNorm, testSetNorm, n=15)
+ubcfTopNListNorm
+```
+
 ```{r}
 
+getTopNdataFrame <- function(topNList){
+  counts <- table(unlist(as.array(as(topNList, "list"))))
+  df <- data.frame(Movie = names(counts), Count = unname(counts)) %>%
+    select("Movie", "Count.Freq") %>%
+    rename("Count" = "Count.Freq") %>%
+    arrange(desc(Count))  
+  df
+}
+
+ibcfTopNdataFrameNorm <- getTopNdataFrame(ibcfTopNListNorm)
+ibcfTopNdataFrameNorm
+
+ubcfTopNdataFrameNorm <- getTopNdataFrame(ubcfTopNListNorm)
+ubcfTopNdataFrameNorm
 ```
+
+```{r}
+compareModels <- function(ibcf, ubcf) {
+  stopifnot(is.data.frame(ibcf))
+  stopifnot(is.data.frame(ubcf))
+  print(paste("Recommendations IBCF:", nrow(ibcf)))
+  print(paste("Recommendations UBCF:", nrow(ubcf)))
+
+  intersectIbcfUbcf <- intersect(ibcf$Movie, ubcf$Movie)
+
+  print(paste("Similar recommendations:", length(intersectIbcfUbcf)))
+  print(paste("Proportion IBCF:", length(intersectIbcfUbcf) / nrow(ibcf) * 100))
+  print(paste("Proportion UBCF:", length(intersectIbcfUbcf) / nrow(ubcf) * 100))
+}
+
+print("First Reduction with Normalization")
+compareModels(ibcfTopNdataFrameNorm, ubcfTopNdataFrameNorm)
+```
+IBCF with normalized data recommends 366 movies.
+UBCF with normalized data recommends 211 movies.
+The intersect between both recommenders for the first reduced dataset (normalized) is 117 movies.
+The relative intersect for IBCF is 33% and for UBCF it is 58%.
+The results are similar as without normalized ratings.
+But we get a small increase in similar recommendations, due to normalizing.
+Normalized ratings make the recommendations more similar.
+WHY?
 
 
 
