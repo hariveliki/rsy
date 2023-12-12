@@ -103,22 +103,8 @@ Genres are in movielensemeta data.
 1 means the genre is represent in the movie.
 0 means it is not.
 By using that logic, we can summarise the columns, and the result is the number of occurenses of the genres in movielense.
+
 ```{r}
-# # Create new df and remove useless columns
-# popular_genresdf <- MovieLenseMeta %>% select(-c("title", "year", "url"))
-
-# # count the number of columns
-# views_per_genre <- popular_genresdf %>%
-#   summarise(across(everything(), sum)) %>%
-#   arrange(desc(.))
-
-# views_per_genre
-```
-```{r}
-# Convert data to the pivot long format
-# views_per_genre_long <- views_per_genre %>%
-#   pivot_longer(everything(), names_to = "Column", values_to = "Sum")
-
 # Count the frequency of each genre and create a new data frame
 merged <- left_join(df, dfMeta, by = c("item" = "title"))
 # Summarize by Genre
@@ -1136,9 +1122,7 @@ ubcfModel <- Recommender(trainData1, method = "UBCF", param = list(nn = 30, meth
 getTopN <- function(model, data, n = 15) {
   sapply(seq(nrow(data)), function(i) {
     recs <- predict(model, newdata = data[i, ], n = n)
-    as(recs, "list")[[1]]
-  })
-}
+    as(recs, "list")[[1]]})}
 
 # Get top 15 recommendations for all users
 top15_ibcf <- getTopN(ibcfModel, testData1)
@@ -1493,7 +1477,7 @@ rec_svd_400_50 <- as(predict(recmod_svd_400_50, testData1, n = n), "list")
 
 
 ```{r}
-**svd10reclist** <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+svd10reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
   rec_ibcf_400[[.x]] %in% rec_svd_400_10[[.x]]
 )) / 15 * 100))
 
@@ -1702,6 +1686,7 @@ First, we determine our good rating.
 We are looking for a balanced ratio between "good" and "bad" ratings and a similar sensitivity and specificity.
 We therefore choose 0.5 as the quantile.
 This is our good rating.
+
 ```{r}
 gR <- quantile(merged_data$rating, 0.5)
 gR
@@ -1780,8 +1765,7 @@ FPR is the proportion of true negative instances that were incorrectly predicted
 ```{r}
 comparemod400 <- evaluate(top_400_scheme, approaches,
   n = steps, type = "topNList",
-  progress = FALSE
-)
+  progress = FALSE)
 
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
@@ -1799,43 +1783,43 @@ The default value of lambda is 0.001 (https://rdrr.io/cran/recommenderlab/src/R/
 The default value of lambda is 0.001
 
 ```{r}
-# Experimentieren mit lambda
-top_400_scheme <- evaluationScheme(
-  matrixReduced1,
+top_400_scheme <- evaluationScheme(matrixReduced1,
   goodRating = gR,
   method = "cross-validation",
-  k = 10,
-  given = 20
-)
-
+  k = 10, given = 20)
+ 
 approaches <- list(
   "Popular movies" = list(name = "POPULAR", param = NULL),
   "SVD lambda 0.0001" = list(
     name = "SVD",
-    param = list(k = 50, lambda = 0.0001)
+    lambda = 0.0001,
+    param = list(k = 50)
   ),
   "SVD lambda def(0.001)" = list(
     name = "SVD",
-    param = list(k = 50, lambda = 0.001)
+    lambda = 0.001,
+    param = list(k = 50)
   ),
   "SVD lambda 0.002" = list(
     name = "SVD",
-    param = list(k = 50, lambda = 0.002)
+    lambda = 0.002,
+    param = list(k = 50)
   ),
   "SVD lambda 0.005" = list(
     name = "SVD",
-    param = list(k = 50, lambda = 0.005)
+    lambda = 0.005,
+    param = list(k = 50)
   ),
   "SVD lambda 0.01" = list(
     name = "SVD",
-    param = list(k = 50, lambda = 0.01)
+    lambda = 0.01,
+    param = list(k = 50)
   ),
   "SVD lambda 0.02" = list(
     name = "SVD",
-    param = list(k = 50, lambda = 0.02)
-  )
-)
-
+    lambda = 0.02,
+    param = list(k = 50)))
+ 
 comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = "topNList", progress = FALSE)
 
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
@@ -1850,10 +1834,9 @@ We dont know where the problem is.
 Aufgabe 10 (DIY): Untersuche die relative Übereinstimmung zwischen Top-N Empfehlungen und
 präferierten Filmen für das “beste” Modell und zwei weiteren Modelle bzw. -parametrisierungen.
 1. Fixiere 20 zufällig gewählte Testnutzer*innen für alle Modellvergleiche,
-2. Bestimme den Anteil der Top-N Empfehlung nach Genres pro Nutzer*in,
-3. Bestimme pro Nutzer*in den Anteil nach Genres seiner Top-Filme (=Filme mit besten Bewertungen),
-4. Vergleiche pro Nutzer*in Top-Empfehlungen vs Top-Filme nach Genres,
-5. Definiere eine Qualitätsmetrik für Top-N Listen und teste sie
+2. Bestimme pro Nutzer*in den Anteil nach Genres seiner Top-Filme (=Filme mit besten Bewertungen),
+3. Vergleiche pro Nutzer*in Top-Empfehlungen vs Top-Filme nach Genres,
+4. Definiere eine Qualitätsmetrik für Top-N Listen und teste sie
 
 Diese Aufgabe ist eine Fortsetzung von Aufgabe 9.
 • Der Top-N Monitor erlaubt zu überprüfen, ob die gemachten Empfehlungen den Präferenzen der
@@ -1863,14 +1846,37 @@ Nutzer*innen entsprechen und verwendet eine einfach verständliche Visualisierun
 ```{r}
 getRandomUsers <- function(data, nUsers, seed) {
   set.seed(seed)
-  testUsers <- sample(1:nrow(data), num_users)
+  testUsers <- sample(1:nrow(data), nUsers)
   dataTest <- data[testUsers, ]
-  return(
-    list(
-      testUsers, dataTest
-    )
-  )
-}
+  return(testUsers)}
+
+getRandomDataset <- function(data, nUsers, seed) {
+  set.seed(seed)
+  testUsers <- sample(1:nrow(data), nUsers)
+  dataTest <- data[testUsers, ]
+  return(dataTest)}
 
 randomUsers <- getRandomUsers(MovieLense, 20, 42)
+randomUsers
 ```
+
+```{r}  
+testUsers <- getRandomUsers(MovieLense, 20, 42)
+testData <- getRandomDataset(MovieLense, 20, 42)
+testUsers
+testData
+```
+
+We have developed two functions, one for the selection of random users
+and one for the selection of random data sets.
+We selected 20 random users from both reduced datasets.
+
+2. Bestimme den Anteil der Top-N Empfehlung nach Genres pro Nutzer*in,
+
+```{r}
+svd7 <- Recommender(testData, "SVD", param = list(k = 7))
+ubcf13 <- Recommender(testData, "UBCF", parameter = list(method = "Euclidean", nn = 13))
+ibcf22 <- Recommender(testData, "IBCF", param = list(k = 22, method = "cosine"))
+svd50 <- Recommender(testData, "SVD", param = list(k = 5))
+```
+
