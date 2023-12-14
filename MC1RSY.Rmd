@@ -1882,10 +1882,10 @@ We selected 20 random users from the Movie Lense dataset.
 2. Bestimme den Anteil der Top-N Empfehlung nach Genres pro Nutzer*in,
 
 ```{r}
-svd30 <- Recommender(Data, "SVD", param = list(k = 30))
+svd3 <- Recommender(Data, "SVD", param = list(k = 3))
 ubcf13 <- Recommender(Data, "UBCF", parameter = list(method = "Euclidean", nn = 13))
 ibcf22 <- Recommender(Data, "IBCF", param = list(k = 22, method = "cosine"))
-svd50 <- Recommender(Data, "SVD", param = list(k = 5))
+svd6 <- Recommender(Data, "SVD", param = list(k = 6))
 ```
 
 ```{r}
@@ -1893,60 +1893,138 @@ svd50 <- Recommender(Data, "SVD", param = list(k = 5))
 N <- 10
 
 # Generate Top-N recommendations for each model
-topN_svd7 <- predict(svd7, Data, n = N)
+topN_svd3 <- predict(svd3, Data, n = N)
 topN_ubcf13 <- predict(ubcf13, Data, n = N)
 topN_ibcf22 <- predict(ibcf22, Data, n = N)
-topN_svd50 <- predict(svd50, Data, n = N)
+topN_svd6 <- predict(svd6, Data, n = N)
 ```
 
 ```{r}
 getTopNRec <- function(users, dataset, model) {
   topN_model <- predict(model, dataset, n = 10)
-  topN_svd7_list <- as(topN_svd7, "list")
-  topN_svd7_tibble <- as_tibble(topN_svd7_list)
-  topN_svd7_dataFrame <- as.data.frame(topN_svd7_tibble)
-  colnames(topN_svd7_dataFrame) <- Users
-  topN_svd7_dataFrame_T <- t(topN_svd7_dataFrame)
-  topN_svd7_dataFrame_T_tibble <- as_tibble(topN_svd7_dataFrame_T)
-  topN_svd7_dataFrame_T_tibble$Users <- Users
-  topN_svd7_dataFrame_T_tibble_long <- pivot_longer(
-    topN_svd7_dataFrame_T_tibble, cols = 1:10, names_to = "topN", values_to = "itemID")
-  topN_svd7_dataFrame_T_tibble_long_genre <- left_join(
-    topN_svd7_dataFrame_T_tibble_long, MovieLenseMeta, by = c("itemID" = "title"))
+  topN_list <- as(topN_model, "list")
+  topN_tibble <- as_tibble(topN_list)
+  topN_dataFrame <- as.data.frame(topN_tibble)
+  colnames(topN_dataFrame) <- Users
+  topN_dataFrame_T <- t(topN_dataFrame)
+  topN_dataFrame_T_tibble <- as_tibble(topN_dataFrame_T)
+  topN_dataFrame_T_tibble$Users <- Users
+  topN_dataFrame_T_tibble_long <- pivot_longer(
+    topN_dataFrame_T_tibble, cols = 1:10, names_to = "topN", values_to = "ID")
+  topN_dataFrame_T_tibble_long_genre <- left_join(
+    topN_dataFrame_T_tibble_long, MovieLenseMeta, by = c("ID" = "title"))
   topNTibble <- select(
-    topN_svd7_dataFrame_T_tibble_long_genre, -topN, -year, -url, -itemID)
+    topN_dataFrame_T_tibble_long_genre, -topN, -year, -url, -ID)
   topNRec <- topNTibble %>% group_by(Users) %>%
     summarise(across(everything(), ~ sum(., is.na(.), 0)))
 }
-topNRec <- getTopNRec(Users, Data, svd7)
+topNRec <- getTopNRec(Users, Data, svd3)
 topNRec
 ```
 
+
 ```{r}
 resultsList <- list()
-modelsList <- list(svd7, ubcf13, ibcf22, svd50)
+modelsList <- list(svd3, ubcf13, ibcf22, svd6)
 for (j in 1:length(modelsList)) {
   topNRec <- getTopNRec(Users, Data, modelsList[[j]])
   resultsList[[j]] <- topNRec
 }
-resultsList
+#resultsList
 ```
 
+Here are the watched genres per user for svd3
+```{r}
+resultsList[1]
+```
+
+Here are the watched genres per user for ubcf13
+```{r}
+resultsList[2]
+```
+
+Here are the watched genres per user for ibcf22
+```{r}
+resultsList[3]
+```
+Here are the watched genres per user for  svd6
+```{r}
+resultsList[4]
+```
+
+## 6.10.3
+
+```{r}
+MovieLenseFjoin <- full_join(
+  (as(MovieLense, 'data.frame')), MovieLenseMeta,
+  by = c("item" = "title")
+) %>%
+  select(-c( "year", "url"))
+
+```
 
 
 ```{r}
-                     
+userFavorites <- MovieLenseFjoin %>% filter(user %in% Users, rating == 5) %>% group_by(user) %>% summarise(across(c(unknown, Action, Adventure, Animation, `Children's`, Comedy, Crime, Documentary, Drama, Fantasy, `Film-Noir`, Horror, Musical, Mystery, Romance, `Sci-Fi`, Thriller, War, Western),sum)) %>% mutate(user = as.numeric(user)) %>%  arrange(user)
+
+userFavorites
+```
+
+
+## 6.10.4
+```{r}
+topNRec <- getTopNRec(users = Users, dataset = Data, model = svd3)[1,2:20]
+userFav <- userFavorites[1,2:20]
+
+bind <- rbind(topNRec, userFav)
+bind <- bind %>% add_column(Type = c("topNRec", "topNUser"))
+bind
+```
+```{r}
+bindPivot <- pivot_longer(bind, cols = 1:19, names_to = "genre", values_to = "value") # cols = 1:19 to get rid of Type
 ```
 
 ```{r}
-
+# create cleveland plot
+ggplot(bindPivot, aes(y = genre, x = value)) +
+  geom_point(aes(color = Type)) + 
+  geom_line(aes(group=genre)) + 
+  labs(title = "Top-N Recommendations vs Top Movies per genre", x = "Value", y = "Genre") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_minimal() 
 ```
 
 ```{r}
+makeCleveland <- function(topNRec, userFav, datatext, text){
+  bind <- rbind(topNRec, userFav)
+  bind <- bind %>% add_column(Type = c("topnmonitor_recom", "topnmonitor_fav_movies"))
+  bind <- pivot_longer(bind, cols = 1:19, values_to = "value", names_to = "genre")
+  ggplot(bind, aes(y = genre, x = value)) +
+    geom_point(aes(color = Type)) + 
+    geom_line(aes(group=genre)) + 
+    theme_minimal() +
+    labs(title = paste("Top-N Recommendations vs Top Movies per genre", text, " ", datatext) , x = "Value", y = "Genre") +
+    theme(plot.title = element_text(hjust = 0.5))
+}
 ```
 
 ```{r}
+#models und datensatz finden und zum titel hinzfuegen.
+listModel <- list("SVD3", "UBCF13", "IBCF22", "SVD_6")
+n_dataset <- list("For data 400", "For data 600")
+
+for (i in 1:length(n_dataset)) {
+  ourtitle <- n_dataset[i]
+  for (j in 1:length(n_models)) {
+    whichplot <- n_models[j]
+    b_df <- topnmonitor_fav_movies_list[[b_i]][1,2:20]
+    a_df <- top_n_list[[i]][1,2:20]
+    print(create_cleveland_plot(a_df, b_df, datatext_i, whichplot))
+  }
+}
 ```
 
-```{r}
-```
+topN_svd3 <- predict(svd3, Data, n = N)
+topN_ubcf13 <- predict(ubcf13, Data, n = N)
+topN_ibcf22 <- predict(ibcf22, Data, n = N)
+topN_svd6
