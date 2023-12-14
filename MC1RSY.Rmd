@@ -1122,7 +1122,9 @@ ubcfModel <- Recommender(trainData1, method = "UBCF", param = list(nn = 30, meth
 getTopN <- function(model, data, n = 15) {
   sapply(seq(nrow(data)), function(i) {
     recs <- predict(model, newdata = data[i, ], n = n)
-    as(recs, "list")[[1]]})}
+    as(recs, "list")[[1]]
+  })
+}
 
 # Get top 15 recommendations for all users
 top15_ibcf <- getTopN(ibcfModel, testData1)
@@ -1765,7 +1767,8 @@ FPR is the proportion of true negative instances that were incorrectly predicted
 ```{r}
 comparemod400 <- evaluate(top_400_scheme, approaches,
   n = steps, type = "topNList",
-  progress = FALSE)
+  progress = FALSE
+)
 
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
@@ -1786,8 +1789,9 @@ The default value of lambda is 0.001
 top_400_scheme <- evaluationScheme(matrixReduced1,
   goodRating = gR,
   method = "cross-validation",
-  k = 10, given = 20)
- 
+  k = 10, given = 20
+)
+
 approaches <- list(
   "Popular movies" = list(name = "POPULAR", param = NULL),
   "SVD lambda 0.0001" = list(
@@ -1818,8 +1822,10 @@ approaches <- list(
   "SVD lambda 0.02" = list(
     name = "SVD",
     lambda = 0.02,
-    param = list(k = 50)))
- 
+    param = list(k = 50)
+  )
+)
+
 comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = "topNList", progress = FALSE)
 
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
@@ -1846,37 +1852,101 @@ Nutzer*innen entsprechen und verwendet eine einfach verständliche Visualisierun
 ```{r}
 getRandomUsers <- function(data, nUsers, seed) {
   set.seed(seed)
-  testUsers <- sample(1:nrow(data), nUsers)
-  dataTest <- data[testUsers, ]
-  return(testUsers)}
+  Users <- sample(1:nrow(data), nUsers)
+  dataTest <- data[Users, ]
+  return(Users)
+}
 
 getRandomDataset <- function(data, nUsers, seed) {
   set.seed(seed)
-  testUsers <- sample(1:nrow(data), nUsers)
-  dataTest <- data[testUsers, ]
-  return(dataTest)}
+  Users <- sample(1:nrow(data), nUsers)
+  dataTest <- data[Users, ]
+  return(dataTest)
+}
 
 randomUsers <- getRandomUsers(MovieLense, 20, 42)
 randomUsers
 ```
 
 ```{r}  
-testUsers <- getRandomUsers(MovieLense, 20, 42)
-testData <- getRandomDataset(MovieLense, 20, 42)
-testUsers
-testData
+Users <- getRandomUsers(MovieLense, 20, 42)
+Data <- getRandomDataset(MovieLense, 20, 42)
+Users
+Data
 ```
 
 We have developed two functions, one for the selection of random users
 and one for the selection of random data sets.
-We selected 20 random users from both reduced datasets.
+We selected 20 random users from the Movie Lense dataset.
 
 2. Bestimme den Anteil der Top-N Empfehlung nach Genres pro Nutzer*in,
 
 ```{r}
-svd7 <- Recommender(testData, "SVD", param = list(k = 7))
-ubcf13 <- Recommender(testData, "UBCF", parameter = list(method = "Euclidean", nn = 13))
-ibcf22 <- Recommender(testData, "IBCF", param = list(k = 22, method = "cosine"))
-svd50 <- Recommender(testData, "SVD", param = list(k = 5))
+svd30 <- Recommender(Data, "SVD", param = list(k = 30))
+ubcf13 <- Recommender(Data, "UBCF", parameter = list(method = "Euclidean", nn = 13))
+ibcf22 <- Recommender(Data, "IBCF", param = list(k = 22, method = "cosine"))
+svd50 <- Recommender(Data, "SVD", param = list(k = 5))
 ```
 
+```{r}
+# Define the number of top recommendations
+N <- 10
+
+# Generate Top-N recommendations for each model
+topN_svd7 <- predict(svd7, Data, n = N)
+topN_ubcf13 <- predict(ubcf13, Data, n = N)
+topN_ibcf22 <- predict(ibcf22, Data, n = N)
+topN_svd50 <- predict(svd50, Data, n = N)
+```
+
+```{r}
+getTopNRec <- function(users, dataset, model) {
+  topN_model <- predict(model, dataset, n = 10)
+  topN_svd7_list <- as(topN_svd7, "list")
+  topN_svd7_tibble <- as_tibble(topN_svd7_list)
+  topN_svd7_dataFrame <- as.data.frame(topN_svd7_tibble)
+  colnames(topN_svd7_dataFrame) <- Users
+  topN_svd7_dataFrame_T <- t(topN_svd7_dataFrame)
+  topN_svd7_dataFrame_T_tibble <- as_tibble(topN_svd7_dataFrame_T)
+  topN_svd7_dataFrame_T_tibble$Users <- Users
+  topN_svd7_dataFrame_T_tibble_long <- pivot_longer(
+    topN_svd7_dataFrame_T_tibble, cols = 1:10, names_to = "topN", values_to = "itemID")
+  topN_svd7_dataFrame_T_tibble_long_genre <- left_join(
+    topN_svd7_dataFrame_T_tibble_long, MovieLenseMeta, by = c("itemID" = "title"))
+  topNTibble <- select(
+    topN_svd7_dataFrame_T_tibble_long_genre, -topN, -year, -url, -itemID)
+  topNRec <- topNTibble %>% group_by(Users) %>%
+    summarise(across(everything(), ~ sum(., is.na(.), 0)))
+}
+topNRec <- getTopNRec(Users, Data, svd7)
+topNRec
+```
+
+```{r}
+resultsList <- list()
+modelsList <- list(svd7, ubcf13, ibcf22, svd50)
+for (j in 1:length(modelsList)) {
+  topNRec <- getTopNRec(Users, Data, modelsList[[j]])
+  resultsList[[j]] <- topNRec
+}
+resultsList
+```
+
+
+
+```{r}
+                     
+```
+
+```{r}
+
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
