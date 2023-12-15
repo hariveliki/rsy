@@ -129,7 +129,7 @@ which can be misleading for the interpretation of the data.
 2. Wie verteilen sich die Nutzerratings der Filme gesamthaft bzw. nach Genres?
 
 ```{r}
-MovieLenseMeta
+#MovieLenseMeta
 ```
 
 ```{r}
@@ -138,7 +138,7 @@ colnames(movie_data)
 
 
 ```{r}
-movie_data
+#movie_data
 ```
 
 We need to join the 2 dataframes.
@@ -211,7 +211,7 @@ We will see how to deal with this problem later.
 3. Wie verteilen sich die mittleren Ratings pro Film bzw. pro Nutzer*in?
 
 ```{r}
-merged_data
+#merged_data
 ```
 Mittlere Rating Filme
 ```{r}
@@ -1130,18 +1130,10 @@ comparison_table <- data.frame(
   IBCF_User3 = top15_ibcf[3],
   UBCF_User3 = top15_ubcf[3]
 )
-comparison_table
 
-print("für user 1: ")
-print(intersect(top15_ibcf[1], top15_ubcf[1]))
-cat("\n")
-
-print("für user 2: ")
-print(intersect(top15_ibcf[2], top15_ubcf[2]))
-cat("\n")
-
-print("für user 3: ")
-print(intersect(top15_ibcf[3], top15_ubcf[3]))
+paste("intersect für user 1 und ibcf/ubcf: ",intersect(top15_ibcf[1], top15_ubcf[1]))
+paste("intersect für user 2 und ibcf/ubcf: ",intersect(top15_ibcf[2], top15_ubcf[2]))
+paste("intersect für user 3 und ibcf/ubcf: ",intersect(top15_ibcf[3], top15_ubcf[3]))
 ```
 We do not see any intersect between the recommendations of the two models.
 
@@ -1236,10 +1228,7 @@ getTopNdataFrame <- function(topNList) {
 }
 
 ibcfTopNdataFrame <- getTopNdataFrame(ibcfTopNList)
-ibcfTopNdataFrame
-
 ubcfTopNdataFrame <- getTopNdataFrame(ubcfTopNList)
-ubcfTopNdataFrame
 ```
 
 ```{r}
@@ -1295,10 +1284,7 @@ getTopNdataFrame <- function(topNList) {
 }
 
 ibcfTopNdataFrame2 <- getTopNdataFrame(ibcfTopNList2)
-ibcfTopNdataFrame2
-
 ubcfTopNdataFrame2 <- getTopNdataFrame(ubcfTopNList2)
-ubcfTopNdataFrame2
 ```
 
 ```{r}
@@ -1384,10 +1370,7 @@ getTopNdataFrame <- function(topNList) {
 }
 
 ibcfTopNdataFrameNorm <- getTopNdataFrame(ibcfTopNListNorm)
-ibcfTopNdataFrameNorm
-
 ubcfTopNdataFrameNorm <- getTopNdataFrame(ubcfTopNListNorm)
-ubcfTopNdataFrameNorm
 ```
 
 ```{r}
@@ -1719,11 +1702,16 @@ FPR is the proportion of true negative instances that were incorrectly predicted
   FP (False Positive): Number of instances falsely predicted as positive.
   TN (True Negative): Number of instances correctly predicted as negative.
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
+
+temp <- tempfile()
+sink(temp)
 comparemod400 <- evaluate(top_400_scheme, approaches,
   n = steps, type = "topNList",
   progress = FALSE
 )
+sink()
+unlink(temp)
 
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
