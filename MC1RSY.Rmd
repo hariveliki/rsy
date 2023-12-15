@@ -1,0 +1,2154 @@
+---
+title: "MC1RSY"
+author: "Tobias Lauber, Haris Alic"
+date: "2023-12-15"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(recommenderlab)
+library(lsa)
+library(dplyr)
+library(tidyr)
+```
+
+
+```{r}
+data("MovieLense")
+str(MovieLense)
+```
+
+```{r}
+summary(MovieLense)
+```
+type:
+```{r}
+class(MovieLense)
+```
+see it as data frame
+```{r}
+movie_data <- as(MovieLense, "data.frame")
+head(movie_data, 20)
+```
+```{r}
+column_names <- colnames(MovieLense)
+# print(column_names)
+```
+
+
+# 6.1 Explorative Datenanalyse [10 Punkte]
+1. Welches sind die am häufigsten geschauten Genres/Filme?
+```{r}
+# we look at slotnames
+slotNames(MovieLense)
+```
+
+```{r}
+# classes
+class(MovieLense@data)
+```
+**We now look at all the unique vector ratings**
+```{r}
+vector_ratings <- as.vector(MovieLense@data)
+unique(vector_ratings)
+```
+A rating of 0 indicates a missing rating, so we have to remove it
+```{r}
+vector_ratings <- vector_ratings[vector_ratings != 0]
+```
+
+we now look, how often a movie was watched, with the help of a dataframe
+
+```{r}
+views_per_movie <- colCounts(MovieLense)
+
+dfrat <- data.frame(
+  movie = names(views_per_movie),
+  views = views_per_movie
+)
+dfviews <- dfrat[order(dfrat$views, decreasing = TRUE), ]
+head(dfviews)
+```
+here we have our 10 most watched movies as a plot
+
+```{r}
+df <- as(MovieLense, "data.frame")
+dfMeta <- as(MovieLenseMeta, "data.frame")
+
+movieCount <- df %>%
+  group_by(item) %>%
+  summarize(freq = n()) %>%
+  arrange(desc(freq))
+
+ggplot(
+  head(movieCount, 10),
+  aes(x = reorder(item, -freq), y = freq)
+) +
+  geom_bar(stat = "identity") +
+  xlab("Movie Titles") +
+  ylab("Frequency") +
+  ggtitle("Top 10 Most Frequent Movies") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+We see the top 10 most frequent watched movies, further below we investigate which genres are the most frequent watched.
+
+Genres are in movielensemeta data.
+1 means the genre is represent in the movie.
+0 means it is not.
+By using that logic, we can summarise the columns, and the result is the number of occurenses of the genres in movielense.
+
+```{r}
+# Count the frequency of each genre and create a new data frame
+merged <- left_join(df, dfMeta, by = c("item" = "title"))
+# Summarize by Genre
+dfMetaGenres <- select(dfMeta, -(1:3))
+# sum all genre columns
+genreCount <- colSums(dfMetaGenres, na.rm = TRUE)
+# create df
+genreCountDf <- data.frame(genre = names(genreCount), freq = genreCount)
+# Create a bar plot
+ggplot(
+  genreCountDf,
+  aes(x = reorder(genre, -freq), y = freq)
+) +
+  geom_bar(stat = "identity") +
+  xlab("Genres") +
+  ylab("Total Frequency") +
+  ggtitle("Most Frequently Watched Genres") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+The plot shows the most frequently watches genres in descending order.
+There is a clear imbalance in the genres, which can lead to a popularity bias, say the tendency to recommend popular items.
+Which in turn can lead to even more people watching dramas and reinforce the bias.
+An additional problem is that the same movie can be categorized in multiple genres, 
+which can be misleading for the interpretation of the data.
+
+2. Wie verteilen sich die Nutzerratings der Filme gesamthaft bzw. nach Genres?
+
+```{r}
+MovieLenseMeta
+```
+
+```{r}
+colnames(movie_data)
+```
+
+
+```{r}
+movie_data
+```
+
+We need to join the 2 dataframes.
+The only thing they have in common are the movie titles.
+```{r}
+# Grouped by Genre 1 plot
+# Merge the data frames based on movie titles. We will further use this
+merged_data <- left_join(movie_data, MovieLenseMeta,
+  by = c("item" = "title")
+)
+
+# Create a new data frame with genres and ratings
+genre_ratings <- merged_data %>%
+  select(Action:Western, rating) %>%
+  gather(genre, is_genre, Action:Western) %>%
+  filter(is_genre == 1) %>%
+  group_by(genre) %>%
+  summarize(
+    avg_rating = mean(rating),
+    median_rating = median(rating)
+  )
+
+ggplot(genre_ratings, aes(x = genre, y = avg_rating, fill = avg_rating)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(avg_rating, 2), vjust = -0.5), size = 3) +
+  coord_cartesian(ylim = c(0, 5)) +
+  xlab("Genre") +
+  ylab("Average Rating") +
+  ggtitle("Distribution of Ratings by Genre") +
+  scale_fill_gradient(low = "black", high = "blue") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# install.packages("testthat")
+library(testthat)
+# Grouped by Genre multiple plots
+genreRatings <- data.frame()
+mergedRatingsGenre <- left_join(df, dfMeta, by = c("item" = "title"))
+genreCols <- names(dfMetaGenres)
+
+for (genre in genreCols) {
+  # Filter the data to only include ratings for movies that belong to the current genre
+  filteredData <- mergedRatingsGenre[mergedRatingsGenre[genre] == 1, ]
+  # Add ratings to a new data frame tagged by genre
+  rows <- data.frame(rating = filteredData$rating, genre = genre)
+  # Add new rows to result data frame
+  genreRatings <- rbind(genreRatings, rows)
+}
+ggplot(
+  genreRatings,
+  aes(x = rating)
+) +
+  geom_histogram(binwidth = 0.5, fill = "grey", alpha = 0.7) +
+  facet_wrap(~genre, scales = "free_y") +
+  xlab("Rating") +
+  ylab("Frequency") +
+  ggtitle("Distribution of User Ratings by Genre") +
+  theme_minimal()
+
+## test stuff
+#test_that("There are more genreRatings because one movie can be specified as multiple genres", {
+#  expect_false(identical(nrow(genreRatings), nrow(df)))
+#})
+```
+The distribution of user ratings is overall positive, with the majority of users rating 3 or higher.
+3, 4 and 5 dominate the ratings, but the problem with 3 is that there are users for whom a 3-star rating is a bad rating and for others it is a good rating.
+We will see how to deal with this problem later.
+
+3. Wie verteilen sich die mittleren Ratings pro Film bzw. pro Nutzer*in?
+
+```{r}
+merged_data
+```
+Mittlere Rating Filme
+```{r}
+# Gruppiere nach Filme und berechne den Durchschnitt
+
+average_ratings_per_movie <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+median_rating <- median(average_ratings_per_movie$mean_rating)
+min_rating <- min(average_ratings_per_movie$mean_rating)
+max_rating <- max(average_ratings_per_movie$mean_rating)
+mean_rating <- mean(average_ratings_per_movie$mean_rating)
+
+# Resultate
+cat("Median Filmbewertung:", median_rating, "\n")
+cat("Minimale Filmbewertung:", min_rating, "\n")
+cat("Maximale Filmbewertung:", max_rating, "\n")
+cat("Durchschnittliche Filmbewertung:", mean_rating, "\n")
+```
+
+Plot Mittlere Rating Filme
+```{r}
+average_ratings_per_movie <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+# Plot
+ggplot(data = average_ratings_per_movie, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "Durchschnittliche Ratings Filme",
+    x = "Durchschnittliche Bewertung",
+    y = "Nummer an Filmen"
+  )
+```
+
+Mittlere Ratings User
+```{r}
+average_ratings_per_user <- merged_data %>%
+  group_by(user) %>%
+  summarize(mean_rating = mean(rating))
+
+median_rating <- median(average_ratings_per_user$mean_rating)
+min_rating <- min(average_ratings_per_user$mean_rating)
+max_rating <- max(average_ratings_per_user$mean_rating)
+mean_rating <- mean(average_ratings_per_user$mean_rating)
+
+# Resultate
+cat("Median durchschnittliche Userbewertung:", median_rating, "\n")
+cat("Minimale durchschnittliche Userbewertung:", min_rating, "\n")
+cat("Maximale durchschnittliche Userbewertung:", max_rating, "\n")
+cat("Durchschnittliche durchschnittliche Userbewertung:", mean_rating, "\n")
+```
+
+Plot Mittlere Ratings User
+```{r}
+ggplot(data = average_ratings_per_user, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "Durchschnittliche Ratings User",
+    x = "Durchschnittliche Bewertung",
+    y = "Nummer an Usern"
+  )
+```
+
+- Plot Average Rating Movies
+  - We see that more users give very bad ratings than very good ratings.
+    We assume these are hate ratings.
+  
+- Plot Average Ratings User
+  - The highest frequency for individual users is between 3.5 and 4.
+    That means the average user tends to rate movies generally positive.
+
+4. Welchen Einfluss hat die Normierung der Ratings pro Nutzer*in auf die Verteilung der mittleren Nutzer-ratings?
+
+```{r}
+normalized_ratings <- merged_data %>%
+  group_by(user) %>%
+  mutate(normalized_rating = (rating - mean(rating)) / sd(rating))
+
+median_normalized_rating <- median(normalized_ratings$normalized_rating)
+min_normalized_rating <- min(normalized_ratings$normalized_rating)
+max_normalized_rating <- max(normalized_ratings$normalized_rating)
+mean_normalized_rating <- mean(normalized_ratings$normalized_rating)
+
+# Resultate
+cat("Median der normalisierten avg Userbewertungen:", median_normalized_rating, "\n")
+cat("Minimale normalisierte avg Userbewertung:", min_normalized_rating, "\n")
+cat("Maximale normalisierte avg Userbewertung:", max_normalized_rating, "\n")
+cat("Durchschnittliche normalisierte avg Userbewertung:", mean_normalized_rating, "\n")
+```
+
+Plot the average user ratings. This time with a Z score normalization
+```{r}
+ggplot(data = normalized_ratings, aes(x = normalized_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "Durchschnittliche Ratings User",
+    x = "Durchschnittliche Bewertung",
+    y = "Nummer an Usern"
+  )
+```
+
+```{r}
+# Normalize the MovieLense data
+Norm <- normalize(MovieLense)
+dfNorm <- as(Norm, "data.frame")
+head(dfNorm)
+
+# Calculate average ratings per user
+avgNormRatingUser <- dfNorm %>%
+  group_by(user) %>%
+  summarize(avgRating = mean(rating)) %>%
+  arrange(desc(avgRating))
+
+#test_that("The mean is around zero", {
+#  expect_true(all.equal(mean(avgNormRatingUser$avgRating), 0, tolerance = 0.01))
+#})
+
+# Visualize for a subset of users for non normalized data
+df %>%
+  filter(user %in% 1:12) %>%
+  ggplot(aes(x = user, y = rating)) +
+  geom_violin(color = "grey", fill = "grey", alpha = 0.5) +
+  labs(
+    x = "User",
+    y = "Ratings",
+    title = "Distribution of Ratings from Individual Users",
+    subtitle = "Subset of Users 1-12"
+  )
+
+# Visualize for a subset of users for normalized data
+dfNorm %>%
+  filter(user %in% 1:12) %>%
+  ggplot(aes(x = user, y = rating)) +
+  geom_violin(color = "grey", fill = "grey", alpha = 0.5) +
+  labs(
+    x = "User",
+    y = "Normalized Ratings",
+    title = "Normalized Distribution of Ratings from Individual Users",
+    subtitle = "Subset of Users 1-12"
+  )
+```
+
+- Plot Average Ratings User
+  We can see that normalization shifts the graph to the left
+  -> The average of the user ratings is worse.
+
+- Plot Violine
+  Normalization eliminates user bias in collaborative filtering.
+  Different users may have different rating standards, some may be more generous than others.
+  Normalization centers each users rating around zero, making comparisons between users more meaningful,
+  e.g. a normalized rating of zero would mean that the user finds the object average by their own standards.
+  Before normalization, we do not see a clear difference between users rating preferences,
+  while after normalization we see the similarities between users and their rating preferences, whether negative or positive.
+
+5. Welche strukturellen Charakteristika und Auffälligkeiten zeigt die User-Item Matrix?
+
+```{r}
+# install.packages("viridis")
+library(viridis)
+set.seed(42)
+
+smallM <- MovieLense[
+  sample(nrow(MovieLense), 50), sample(ncol(MovieLense), 50)
+]
+# Visualize the sparsity pattern of the smallMovieLense matrix
+library(Matrix)
+image(as(smallM, "matrix"), main = "Sparsity Pattern of User-Item Matrix", xlab = "Items", ylab = "Users", col = viridis(5))
+legend("topright", legend = c("1", "2", "3", "4", "5"), fill = viridis(5), title = "Rating")
+
+# Calculate sparsity level
+movieMatrix <- as(MovieLense, "matrix")
+totalN <- length(movieMatrix)
+filledN <- sum(
+  !is.na(movieMatrix) & movieMatrix > 0,
+  na.rm = TRUE
+)
+sparsityLevel <- (totalN - filledN) / totalN
+print(paste("Sparsity Level: ", round(sparsityLevel * 100, 2), "%"))
+```
+
+The user item matrix represents the interactions or ratings between users and items.
+In the image the colored dots represent interactions or in our case ratings.
+The large number of empty space indicates that users have not interacted with any item.
+This is a common problem in real world user-item matrices,
+as not every user interacts with every item.
+The sparsity level of the item-user-matrix for the movielens dataset is ca. 93.7%.
+
+# 6.2 Datenreduktion [6 Punkte]
+Aufgabe 2: Reduziere den MovieLens Datensatz auf rund 400 Nutzerinnen und 700 Filme, indem du Filme und Nutzerinnen mit sehr wenigen Ratings entfernst.
+1. Anzahl Filme und Nutzer*innen sowie Sparsity vor und nach Datenreduktion
+
+```{r}
+# Filtere 400 aktivste users
+top_400_users <- merged_data %>%
+  group_by(user) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(1:400) %>%
+  select(user)
+
+
+# Filter the top 700 movies
+top_movies <- merged_data %>%
+  group_by(item) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(1:700) %>%
+  select(item)
+
+# Reduziere dataset für Filme und User
+dataFrame1 <- merged_data %>%
+  filter(user %in% top_400_users$user, item %in% top_movies$item)
+```
+For 400
+
+Before
+```{r}
+num_users_before <- length(unique(merged_data$user))
+num_movies_before <- length(unique(merged_data$item))
+sparsity_before <- 1 - (nrow(merged_data) / (num_users_before * num_movies_before))
+
+# Output before reduction
+cat("Number of users before reduction:", num_users_before, "\n")
+cat("Number of movies before reduction:", num_movies_before, "\n")
+cat("Sparsity before reduction:", sparsity_before, "\n")
+```
+
+After reduction
+```{r}
+num_users_after <- length(unique(dataFrame1$user))
+num_movies_after <- length(unique(dataFrame1$item))
+sparsity_after <- 1 - (nrow(dataFrame1) / (num_users_after * num_movies_after))
+
+# Output after reduction
+cat("Number of users after reduction:", num_users_after, "\n")
+cat("Number of movies after reduction:", num_movies_after, "\n")
+cat("Sparsity after reduction:", sparsity_after, "\n")
+```
+That makes sense, because if we kick out the users who watch fewer movies, then the sparsity should decrease.
+
+Plot Avarage ratings.
+```{r}
+library(gridExtra)
+
+avg_ratings_400 <- dataFrame1 %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg_ratings_full <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg400 <- ggplot(data = avg_ratings_400, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "400er Reduktion",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
+
+avgfull <- ggplot(data = avg_ratings_full, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "voller Datensatz",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
+
+grid.arrange(avg400, avgfull, ncol = 2)
+```
+
+Second dataframe with 400 best users sliced between 200 and 600.
+```{r}
+top_600_users <- merged_data %>%
+  group_by(user) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(201:600) %>%
+  select(user)
+
+# Filter the top 700 movies
+top_movies <- merged_data %>%
+  group_by(item) %>%
+  summarize(total_ratings = n()) %>%
+  arrange(desc(total_ratings)) %>%
+  slice(1:700) %>%
+  select(item)
+
+# Reduziere dataset für Filme und User
+dataFrame2 <- merged_data %>%
+  filter(user %in% top_600_users$user, item %in% top_movies$item)
+```
+
+Plot average ratings for 600
+```{r}
+avg_ratings_600 <- dataFrame2 %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg_ratings_full <- merged_data %>%
+  group_by(item) %>%
+  summarize(mean_rating = mean(rating))
+
+avg600 <- ggplot(data = avg_ratings_600, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "600er Reduktion",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
+
+avgfull <- ggplot(data = avg_ratings_full, aes(x = mean_rating)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
+  labs(
+    title = "voller Datensatz",
+    x = "Durchschnittliche Bewertung",
+    y = "Anzahl Filme"
+  )
+
+grid.arrange(avg600, avgfull, ncol = 2)
+```
+
+Again, before data reduction
+```{r}
+num_users_before <- length(unique(merged_data$user))
+num_movies_before <- length(unique(merged_data$item))
+sparsity_before <- 1 - (nrow(merged_data) / (num_users_before * num_movies_before))
+
+# Output before reduction
+cat("Number of users before reduction:", num_users_before, "\n")
+cat("Number of movies before reduction:", num_movies_before, "\n")
+cat("Sparsity before reduction:", sparsity_before, "\n")
+```
+This is after you have reduced to the 600 most relevant users, without the 200 most relevant users.
+
+```{r}
+num_users_after <- length(unique(dataFrame2$user))
+num_movies_after <- length(unique(dataFrame2$item))
+sparsity_after <- 1 - (nrow(dataFrame2) / (num_users_after * num_movies_after))
+
+# Output after reduction
+cat("Number of users after reduction:", num_users_after, "\n")
+cat("Number of movies after reduction:", num_movies_after, "\n")
+cat("Sparsity after reduction:", sparsity_after, "\n")
+```
+
+The sparsity with 943 users and 1664 films is 0.93, which is very high.
+We reduce the data set to 400 users (who gave the most ratings) and 700 movies.
+We see that the sparsity has dropped to 76 percent, which is reasonable,
+because we have the most active users and most rated movies left.
+The second reduced data frame takes the most active 600 users, but cuts out the first 200.
+We see that the sparsity increases to 88 percent.
+The first 200 most active users are no longer present, so we have a higher sparsity.
+
+3. Zusatz für Gruppen: Quantifiziere die “Intersection over Union” aller reduzierten Datensätze paarweise.
+
+```{r}
+head(dataFrame1)
+```
+Die Formel ist: 
+
+IOU = (# gemeinsame Filme) / (#Filme in beiden df zusammen )
+
+```{r}
+# Distinkte Movies / User für die Beiden Dataframes
+anzahl_movies_400 <- n_distinct(dataFrame1$item)
+anzahl_users_400 <- n_distinct(dataFrame1$user)
+
+anzahl_movies_600 <- n_distinct(dataFrame2$item)
+anzahl_users_600 <- n_distinct(dataFrame2$user)
+
+# Intersection
+common_movies <- intersect(dataFrame1$item, dataFrame2$item)
+common_users <- intersect(dataFrame1$user, dataFrame2$user)
+
+# IOU
+IOU_movies <- length(common_movies) / (anzahl_movies_400 + anzahl_movies_600 - length(common_movies))
+
+IOU_users <- length(common_users) / (anzahl_users_400 +
+  anzahl_users_600 - length(common_users))
+
+cat("Intersection over Union für Filme:", IOU_movies, "\n")
+cat("Intersection over Union für Nutzer:", IOU_users, "\n")
+```
+This result was logical after our data separation, as we use the same films and 0.333 also makes sense,
+as only users 201-400 appear in both data frames.
+The intersection over union is a measure of the overlap between two data sets.
+For the user IoU, there is an overlap of about 33% between the first and second data sets.
+For the movies IoU, the overlap between the first and second data sets is about 100%.
+The overlap is quite reasonable and therefore the data sets are not too similar.
+We could reduce the similarity by choosing other splitting techniques, e.g. instead of 400 users we could have 700,
+and the indexing could range from 1 to 500 and from 201 to 700 and see how the IoU behaves.
+
+# 6.3 Analyse Ähnlichkeitsmatrix [12 Punkte]
+
+Aufgabe 3: Erzeuge einen IBCF Recommender und analysiere die Ähnlichkeitsmatrix des trainierten Modelles für den reduzierten Datensatz.
+1. Zerlege den Datensatz in Trainings- und Testdaten im verhältnis 4:1.
+
+```{r}
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
+
+evalScheme1 <- evaluationScheme(
+  matrixReduced1,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
+evalScheme1
+```
+
+```{r}
+matrixReduced2 <- as(dataFrame2, "realRatingMatrix")
+
+evalScheme2 <- evaluationScheme(
+  matrixReduced2,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
+evalScheme2
+```
+
+We use the evaluationScheme for the first data set with the 400 most active users,
+and we decided that good ratings are equal to 4 because we thought 3 was too mediocre.
+The output is a realRatingMatrix with 67427 ratings and the training set proportion is 0.8.
+For the second dataset, we have the same parameters and there are 33300 ratings.
+
+1. Trainiere ein IBCF Modell mit 30 Nachbarn und Cosine Similarity.
+
+```{r}
+# Get the training set from the evaluationScheme object
+trainData1 <- getData(evalScheme1, "train")
+testData1 <- getData(evalScheme1, "known")
+
+trainData2 <- getData(evalScheme2, "train")
+testData2 <- getData(evalScheme2, "known")
+
+# Train the IBCF model
+trainedModel1 <- Recommender(
+  trainData1,
+  method = "IBCF", param = list(k = 30, method = "Cosine")
+)
+trainedModel2 <- Recommender(
+  trainData2,
+  method = "IBCF", param = list(k = 30, method = "Cosine")
+)
+```
+
+Top 400
+```{r}
+sim_400 <- getModel(trainedModel1)$sim
+image(getModel(trainedModel1)$sim,
+  main = "IBCF Similarity Matrix Heatmap for top 400"
+)
+```
+
+Top 600 without first 200
+```{r}
+sim_600 <- getModel(trainedModel2)$sim
+image(getModel(trainedModel2)$sim,
+  main = "IBCF Similarity Matrix Heatmap for top 600 (without first 200)"
+)
+```
+
+The first diagram entitled "Top 600 (excluding the first 200) similarity matrix heatmap," 
+shows an unevenly distributed heatmap and appears quite sparse.
+The second chart, titled "IBCF Similarity Matrix Heatmap for top 400," shows a slightly denser heatmap,
+which suggests that a greater number of similarities may have been identified between the articles.
+The difference in active users can be derived from the density of interactions.
+If a model has more active users, we would expect a denser similarity matrix as there are more reviews and interactions from which similarities can be derived.
+interactions from which similarities can be calculated.
+The heatmap with more dots (or less white space) could be the one with more active users, assuming that "active
+refers to the frequency or volume of ratings given by users. More active users usually lead to a
+denser similarity matrix as there are more data points to calculate the similarities between each item
+
+3. Bestimme die Filme, die am häufigsten in der Cosine-Ähnlichkeitsmatrix auftauchen und analyisiere Vorkommen und Ratings im reduzierten Datensatz.
+generelle Verteilung der Anzahl an 'Auftauchen' in der Cosine Ähnlichkeitsmatrix
+
+```{r}
+sums400 <- colSums(sim_400)
+twentytop_400 <- head(sort(sums400, decreasing = TRUE), 20)
+hist(
+  sums400,
+  breaks = 50, main = "Distribution of Movie Rating Occurences",
+  xlab = "Amount of Times Rated",
+  ylab = "Number of Movies that occur x times"
+)
+```
+We can see that a large proportion of movies do not appear at all or only very rarely (left side).
+The largest proportion of movies rated is between 0 and 50 occurrences.
+We conclude that most movies are rated very rarely.
+
+```{r}
+sumsDF2 <- colSums(sim_600)
+twentytop_600 <- head(sort(sumsDF2, decreasing = TRUE), 20)
+hist(
+  sumsDF2,
+  breaks = 50, main = "Distribution of Movie Rating Occurences",
+  xlab = "Amount of Times Rated",
+  ylab = "Number of Movies that occur x times"
+)
+```
+Because the users from the second dataset are less active than the users from the first dataset, 
+we see more movies are rated fewer times.
+
+```{r}
+twentytop_400
+```
+These are the top 20 most rated movies for the first data set.
+
+```{r}
+twentytop_600
+```
+These are the top 20 most rated movies for the second data set.
+It is interesting that the film 'Fallen (1998)', which appeared the most in the
+data set 400, does not even make the top20 here.
+
+First Data Set
+```{r}
+ggplot() +
+  geom_histogram(data = dataFrame1 %>% group_by(item) %>%
+    count(), aes(n), binwidth = 0.05, color = "blue", fill = "white", alpha = 0.5) +
+  labs(
+    title = "Comparison between Recommendation and Reduced Data Set 1",
+    subtitle = "Top 20 Movies from IBCF in green",
+    x = "Amount of Ratings",
+    y = "Amount of Movies",
+  ) +
+  geom_vline(xintercept = twentytop_400, color = "green")
+```
+The blue histogram shows the number of ratings per movie for the first data set.
+The green lines show the 20 most rated movies from the IBCF.
+We see that the recommendations tend to be in the middle of the distribution.
+The model has not choosed the most rated movies.
+
+Second Data Set
+```{r}
+ggplot() +
+  geom_histogram(data = dataFrame2 %>% group_by(item) %>%
+    count(), aes(n), binwidth = 0.05, color = "blue", fill = "white", alpha = 0.5) +
+  labs(
+    title = "Comparison between Recommendation and Reduced Data Set 1",
+    subtitle = "Top 20 Movies from IBCF in green",
+    x = "Amount of Ratings",
+    y = "Amount of Movies",
+  ) +
+  geom_vline(xintercept = twentytop_600, color = "green")
+```
+The blue histogram shows the number of ratings per film for the first data set.
+The green lines show the 20 best-rated films from the IBCF.
+It can be seen that the recommendations tend to lie in the middle of the distribution,
+regardless of the skewness of the distribution.
+The model has a balanced recommendation between rarely and frequently rated films.
+
+Movie Ratings Distribution (Normalized) for top 20 (first data set)
+```{r}
+names_twentytop_400 <- names(twentytop_400)
+
+top20simmrat <- dataFrame1 %>%
+  group_by(item) %>%
+  filter(item %in% names_twentytop_400)
+
+ggplot() +
+  geom_histogram(data = top20simmrat, aes(rating), binwidth = 0.1) +
+  facet_wrap(vars(top20simmrat$item)) +
+  labs(
+    x = "Normalized Ratings",
+    y = "Number of Ratings",
+    title = "Movie Ratings Distribution (Normalized) for top 20 Movies"
+  )
+```
+We see for each individual movie of our recommender (top 400) how it was rated, 
+e.g. the "When We Were Kings (1996)" was rated very positively,
+where as "Excess Baggage (1997)" was rated very negatively.
+
+Movie Ratings Distribution (Normalized) for top 20 (second data set)
+```{r}
+names_twentytop_600 <- names(twentytop_600)
+
+top20simmrat <- dataFrame2 %>%
+  group_by(item) %>%
+  filter(item %in% names_twentytop_600)
+
+ggplot() +
+  geom_histogram(data = top20simmrat, aes(rating), binwidth = 0.1) +
+  facet_wrap(vars(top20simmrat$item)) +
+  labs(
+    x = "Normalized Ratings",
+    y = "Number of Ratings",
+    title = "Movie Ratings Distribution (Normalized) for top 20 Movies"
+  )
+```
+The distribution is much sparser than before.
+We can see for each individual movie of our recommender (second data set) how it was rated, 
+In contrast to the other data set, this one tends to be rated more positively,
+For example, the film "Short Cuts (1993)" was rated very positively,
+whereas "Sirens (1994)" was rated rather negatively.
+
+4. Wiederhole die Analyse, indem du bei der Datenpartitionierung die Anzahl nicht-maskierter
+   Produkte der Test-User veränderst und kommentiere den Einfluss auf die Resultate.
+```{r}
+# Convert from df to realRatingMatrix
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
+
+# Define the given values to iterate over
+given_values <- c(5, 10, 20, 40)
+
+# Iterate over the different given values
+for (given in given_values) {
+  cat("Processing for given =", given, "\n")
+
+  # Create evaluation scheme
+  evalScheme <- evaluationScheme(
+    matrixReduced1,
+    method = "split",
+    train = 0.8,
+    given = given,
+    goodRating = 4
+  )
+
+  # Train the IBCF model
+  trained_model <- Recommender(
+    getData(evalScheme, "train"),
+    method = "IBCF",
+    param = list(k = 30, method = "Cosine")
+  )
+
+  # Extract the similarity matrix
+  simMatrix <- getModel(trained_model)$sim
+
+  # Find the top 10 most similar movies
+  top10 <- apply(simMatrix, 1, function(x) {
+    order(x, decreasing = TRUE)[1:10]
+  })
+
+  # Unlist and tabulate to find most frequent
+  mostFrequentMovies <- table(as.vector(top10))
+  # Sort
+  mostFrequentMovies <- sort(mostFrequentMovies, decreasing = TRUE)
+
+  # Process for ggplot2
+  dfMostFrequentMovies <- as.data.frame(mostFrequentMovies)
+  colnames(dfMostFrequentMovies) <- c("item", "freq")
+
+  # Get the names for the movies for given ids in mostFreqentMovies
+  dfMostFrequentMovies$MovieTitle <- dfMeta[as.numeric(names(mostFrequentMovies)), "title"]
+
+  # Visualize
+  p <- ggplot(
+    head(dfMostFrequentMovies, 10),
+    aes(x = reorder(MovieTitle, -freq), y = freq)
+  ) +
+    geom_bar(stat = "identity") +
+    xlab("Movie Titles") +
+    ylab("Frequency") +
+    ggtitle(paste("Top 10 Most Frequent Movies in Similarity Matrix for given =", given)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  print(p)
+}
+```
+
+The IBCF Recommender uses a test set of user profiles that are not part of the training but of the predictions.
+Additionally, there is a set of masked ratings to evaluate the prediction.
+For the masking, we use the Given-x parameter, which is a random selection 
+from all test users for the prediction, the rest is part of the evaluation.
+It turns out that the same result is not always achieved for different given values,
+e.g. the recommendation results for Given = 5 differ from those of the others.
+We can state the same for the second data set.
+
+# 6.4 Implementierung Ähnlichkeitsmatrix
+Aufgabe 4 (DIY): Implementiere Funktionen zur Berechnung von Ähnlichkeitsmatrizen bei IBCF Recommenders für 
+(a) Cosine Similarity mit ordinale Ratings und 
+(b) Jaccard Similarity mit binären Ratings
+
+1. Vergleiche die Resultate beider Funktionen hinsichtlich Übereinstimmung und Laufzeit mit dem Resultat der Funktion Recommender()
+   und der eines anderen R-Paketes anhand 100 zufällig gewählter Filme.
+
+Jaccard Similarity Function
+```{r}
+getJaccardSim <- function(M) {
+  A <- tcrossprod(M)
+  im <- which(A > 0, arr.ind = TRUE)
+  b <- rowSums(M)
+  Aim <- A[im]
+  sparseMatrix(
+    i = im[, 1],
+    j = im[, 2],
+    x = Aim / (b[im[, 1]] + b[im[, 2]] - Aim),
+    dims = dim(A)
+  )
+}
+```
+
+```{r}
+set.seed(42)
+index <- sort(sample(1:nrow(MovieLense), 100)) # wähle 100 zufällige Filme
+oursample <- MovieLense[index]
+# reguläre Werte Matrix
+oursample_Matrix <- as(oursample, "matrix")
+oursample_Matrix[is.na(oursample_Matrix)] <- 0 # ersetze na durch 0
+
+# binäre Werte Matrix
+oursample_bin <- binarize(oursample, 4)
+sampledMatrix <- as(oursample_bin, "matrix")
+
+jaccard_sim <- as(getJaccardSim(sampledMatrix), "matrix")
+
+jaccard_sim[1:5, 1:5]
+```
+
+Cosinus Similarity Function
+```{r}
+getCosineSim <- function(M) {
+  similarity <- M / sqrt(rowSums(M * M))
+  similarity[is.na(similarity)] <- 0
+  similarity <- similarity %*% t(similarity)
+  similarity <- as(similarity, "matrix")
+}
+```
+
+We use the cosine similarity on the regular data (100 movies)
+```{r}
+cosinus_sim <- getCosineSim(oursample_Matrix)
+cosinus_sim[1:5, 1:5]
+```
+
+We compare the custom Cosine with Recommender Cosine and proxy Cosine
+```{r}
+realRM <- as(oursample_Matrix, "realRatingMatrix")
+cosine_rec <- as.matrix(similarity(realRM, method = "cosine", which = "users"))
+diag(cosine_rec) <- 1
+rescale <- function(x) {
+  return(1 / 2 * (x + 1))
+}
+co_sim_rec <- apply(cosinus_sim, 1, rescale)
+
+max(abs(cosine_rec - co_sim_rec), na.rm = TRUE)
+
+all.equal(cosine_rec, co_sim_rec)
+```
+Recommenderlab rescales the matrix, so we have to do it also.
+Now we proof if our implementation is allmost equal to the recommenderlab implementation.
+We see there is almost no difference (floating point error) between our custom implementation and the recommender cosine.
+
+Now we compare our implementation with the proxy cosine
+```{r}
+library(proxy)
+proxy_cosine <- as(cosine(t(oursample_Matrix)), "matrix")
+max(abs(cosinus_sim - proxy_cosine))
+all.equal(cosinus_sim, proxy_cosine)
+```
+We see that there is almost no difference between our custom implementation and the proxy cosine.
+
+Calculate the Runtimes
+```{r}
+startTime <- Sys.time()
+cosineSimMatrix <- getCosineSim(oursample_Matrix)
+endTime <- Sys.time()
+runtimeCustom <- endTime - startTime
+print("Runtim for custom cosine function:")
+print(runtimeCustom)
+
+startTime <- Sys.time()
+realRM <- as(oursample_Matrix, "realRatingMatrix")
+cosine_rec <- as.matrix(similarity(realRM, method = "cosine", which = "users"))
+endTime <- Sys.time()
+runtimeCustom <- endTime - startTime
+print("Runtim for recommender cosine function:")
+print(runtimeCustom)
+
+startTime <- Sys.time()
+proxy_cosine <- as(cosine(t(oursample_Matrix)), "matrix")
+endTime <- Sys.time()
+runtimeCustom <- endTime - startTime
+print("Runtim for proxy cosine function:")
+print(runtimeCustom)
+```
+The proxy cosine function is about four times slower than our custom implementation.
+The recommender cosine function is also slower than our custom implementation,
+because we have to convert the matrix into a realRatingMatrix, which requires more steps and is slower.
+is slower.
+
+1. Visualisiere und vergleiche die Verteilung der Ähnlichkeiten von Cosine Similarity für ordinale Ratings
+und von Jaccard Similarity für binäre Ratings mittels den von dir implementierten Funktionen.
+```{r}
+cos_jacc <- mean(abs(cosinus_sim - jaccard_sim), na.rm = TRUE)
+print("Mean Absolute Difference between Cosinus and Jaccard:")
+print(cos_jacc)
+```
+Interpretation:
+The Mean Absolute Difference (MAD) can be interpreted as the average error between the two measures.
+Since cosine similarity and Jaccard similarity are different metrics
+(cosine similarity takes into account the magnitude of the vectors, while Jaccard similarity is based on the presence/absence of characteristics),
+some difference is to be expected. A MAD of 0.12 indicates that there is some discrepancy between the two measures,
+the overall magnitude of this discrepancy is modest. This suggest that for the particular dataset,
+both measures are providing relatively similar information.
+
+Visualization
+```{r}
+library(ggplot2)
+# install.packages("reshape2")
+library(reshape2)
+
+# Daten für die Heatmap vorbereiten
+cosinus_melted <- melt(cosinus_sim)
+jaccard_melted <- melt(jaccard_sim)
+
+# Plotte cos Heatmap
+movie_labels <- rownames(cosinus_sim)
+
+# long format
+cos_sim_df <- as.data.frame(as.table(cosinus_sim))
+cos_sim_df$Var1 <- factor(cos_sim_df$Var1, levels = movie_labels)
+cos_sim_df$Var2 <- factor(cos_sim_df$Var2, levels = movie_labels)
+
+# heatmap
+ggplot(data = cos_sim_df, aes(Var1, Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(title = "Cosine Similarity Matrix", x = "Movies", y = "Movies") +
+  scale_x_discrete(labels = rep("", nrow(cos_sim_df))) +
+  scale_y_discrete(labels = rep("", nrow(cos_sim_df)))
+```
+
+```{r}
+# jaccard heatmap
+ggplot(data = jaccard_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  labs(title = "Jaccard Similarity Matrix", x = "Movies", y = "Movies") +
+  theme_minimal()
+```
+
+Our dataset consists of ratings which are non binary and on different scales.
+Cosine similarity (CS) can capture the nuances in user preferences more effectively than Jaccard Similarity (JS).
+The CS will consider different levels of preference (e.g. rating scales from 1 to 5),
+whereas Jaccard similarity only considers whether an item was rated or not, ignoring the rating scale.
+
+Our users may rate only a small subset of all available items (high sparsity).
+CS can still find a high degree of similarity between two users even if they have rated a different number of items.
+
+Jaccard does not take into account the magnitude of the interaction and would consider two users who rated a different
+number of items less similar, even if the smaller set of ratings is a subset of the larger set of ratings.
+
+# 6.5 Produktabdeckung - Top-N Listen von IBCF und UBCF [12 Punkte]
+Aufgabe 5: Vergleiche und diskutiere Top-N Empfehlungen von IBCF und UBCF Modellen mit 30 Nachbarn
+und Cosine Similarity für den reduzierten Datensatz.
+1. Berechne die Top-15 Empfehlungen aller Testnutzer*innen via IBCF und UBCF
+
+```{r}
+library(recommenderlab)
+
+dataFrame1 <- merged_data %>%
+  filter(user %in% top_400_users$user, item %in% top_movies$item)
+
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
+
+evalScheme1 <- evaluationScheme(
+  matrixReduced1,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
+
+trainData1 <- getData(evalScheme1, "train")
+testData1 <- getData(evalScheme1, "known")
+
+dataFrame2 <- merged_data %>%
+  filter(user %in% top_600_users$user, item %in% top_movies$item)
+
+matrixReduced2 <- as(dataFrame2, "realRatingMatrix")
+
+evalScheme2 <- evaluationScheme(
+  matrixReduced2,
+  method = "split",
+  train = 0.8,
+  given = 5,
+  goodRating = 4
+)
+
+trainData2 <- getData(evalScheme2, "train")
+testData2 <- getData(evalScheme2, "known")
+
+ibcfModel <- Recommender(trainData1, method = "IBCF", param = list(k = 30, method = "Cosine"))
+ubcfModel <- Recommender(trainData1, method = "UBCF", param = list(nn = 30, method = "Cosine"))
+
+# Function to get top N recommendations
+getTopN <- function(model, data, n = 15) {
+  sapply(seq(nrow(data)), function(i) {
+    recs <- predict(model, newdata = data[i, ], n = n)
+    as(recs, "list")[[1]]
+  })
+}
+
+# Get top 15 recommendations for all users
+top15_ibcf <- getTopN(ibcfModel, testData1)
+top15_ubcf <- getTopN(ubcfModel, testData1)
+```
+
+2. Vergleiche die Top-15 Empfehlungen von IBCF vs UBCF für drei Testnutzer*innen mittels Tabelle
+
+```{r}
+comparison_table <- data.frame(
+  # Annahme: Die Zeilen repräsentieren die Top-15 Empfehlungen
+  IBCF_User1 = top15_ibcf[1],
+  UBCF_User1 = top15_ubcf[1],
+  IBCF_User2 = top15_ibcf[2],
+  UBCF_User2 = top15_ubcf[2],
+  IBCF_User3 = top15_ibcf[3],
+  UBCF_User3 = top15_ubcf[3]
+)
+comparison_table
+
+print("für user 1: ")
+print(intersect(top15_ibcf[1], top15_ubcf[1]))
+cat("\n")
+
+print("für user 2: ")
+print(intersect(top15_ibcf[2], top15_ubcf[2]))
+cat("\n")
+
+print("für user 3: ")
+print(intersect(top15_ibcf[3], top15_ubcf[3]))
+```
+We do not see any intersect between the recommendations of the two models.
+
+3. Visualisiere und diskutiere für alle Testnutzer*innen summarisch die 
+   Verteilung der Top-15 Empfehlungen von IBCF und UBCF.
+```{r}
+# combine all recommendations into a single vector for each method
+all_ibcf <- unlist(top15_ibcf)
+all_ubcf <- unlist(top15_ubcf)
+
+# Create a table of frequencies for each set of recommendations
+freq_ibcf <- table(all_ibcf)
+freq_ubcf <- table(all_ubcf)
+
+# Convert the tables to data frames for plotting
+df_ibcf <- as.data.frame(freq_ibcf)
+df_ubcf <- as.data.frame(freq_ubcf)
+
+names(df_ibcf) <- c("Movie", "IBCF_Count")
+names(df_ubcf) <- c("Movie", "UBCF_Count")
+
+df_combined <- merge(df_ibcf, df_ubcf, by = "Movie", all = TRUE)
+
+df_combined[is.na(df_combined)] <- 0
+
+library(ggplot2)
+
+df_melted <- reshape2::melt(df_combined, id.vars = "Movie")
+
+ggplot(data = df_melted, aes(x = Movie, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Movie", y = "Recommendation Count", fill = "Method") +
+  ggtitle("Distribution of Movie Recommendations: IBCF vs. UBCF") +
+  theme(axis.text.x = element_blank())
+```
+In the graph we see the distribution for both recommenders recommending different movies.
+For example, UBCF recommends a movie very frequently (far left in the graph), while the IBCF recommendation program does not. On the far right,
+we see a lot of movies that are only recommended by UBCF and not by IBCF.
+
+UBCF algorithms make recommendations based on the similarity of user interaction patterns.
+If a group of users has interacted with a certain set of movies that is not widely popular or rated by other users,
+UBCF can still recommend these movies to similar users.
+
+UBCF is typically better at capturing the "long tail" of less popular items.
+This means it can recommend movies that have been rated by a small number of similar users,
+while IBCF might miss these if the items themselves dont have enough interactions to establish strong item-item similarities.
+
+# 6.6 Personalisierte Empfehlungen - Top-N Listen von IBCF und UBCF [16 Punkte]
+Aufgabe 6: Untersuche den Einfluss von Ratings und Modelltyp auf Top-N Empfehlungen für den reduzierten Datensatz
+und vergleiche die Empfehlungen über alle Testnutzerinnen in den Top-15 Listen,
+wenn Modelltyp und Rating verändert werden. Vergleiche die Verteilung übereinstimmender Empfehlungen
+aller Testnutzerinnen in den Top-15 Listen für,
+1. IBCF vs UBCF, beide mit ordinalen Ratings und Cosine Similarity,
+Hinweise: 
+Diese Aufgabe ist eine Fortsetzung von Aufgabe 5.
+Gefordert ist eine vergleichende, statistische Analyse inklusive Visualisierung.
+Der erste Schritt dabei ist die Übereinstimmung der Empfehlungen pro Nutzer*in zu untersuchen. 
+Implementiere eine Funktion für die Überprüfung der Übereinstimmung von Empfehlungen
+
+```{r}
+matrixReduced1 <- as(dataFrame1, "realRatingMatrix")
+evaluationScheme <- evaluationScheme(matrixReduced1, method = "split", train = 0.8, given = 5, goodRating = 4)
+trainSet <- getData(evaluationScheme, "train")
+testSet <- getData(evaluationScheme, "known")
+```
+
+```{r}
+ibcf <- Recommender(trainSet, "IBCF", param = list(k = 30, method = "cosine"))
+ibcf
+
+ubcf <- Recommender(testSet, "UBCF", param = list(nn = 30, method = "cosine"))
+ubcf
+```
+
+```{r}
+ibcfTopNList <- predict(ibcf, testSet, n = 15)
+ibcfTopNList
+
+ubcfTopNList <- predict(ubcf, testSet, n = 15)
+ubcfTopNList
+```
+
+```{r}
+getTopNdataFrame <- function(topNList) {
+  counts <- table(unlist(as.array(as(topNList, "list"))))
+  df <- data.frame(Movie = names(counts), Count = unname(counts)) %>%
+    select("Movie", "Count.Freq") %>%
+    rename("Count" = "Count.Freq") %>%
+    arrange(desc(Count))
+  df
+}
+
+ibcfTopNdataFrame <- getTopNdataFrame(ibcfTopNList)
+ibcfTopNdataFrame
+
+ubcfTopNdataFrame <- getTopNdataFrame(ubcfTopNList)
+ubcfTopNdataFrame
+```
+
+```{r}
+library(dplyr)
+compareModels <- function(ibcf, ubcf) {
+  stopifnot(is.data.frame(ibcf))
+  stopifnot(is.data.frame(ubcf))
+  print(paste("Recommendations IBCF:", nrow(ibcf)))
+  print(paste("Recommendations UBCF:", nrow(ubcf)))
+
+  intersect_ <- intersect(ibcf$Movie, ubcf$Movie)
+
+  print(paste("Similar recommendations:", length(intersect_)))
+  print(paste("Proportion IBCF:", length(intersect_) / nrow(ibcf) * 100))
+  print(paste("Proportion UBCF:", length(intersect_) / nrow(ubcf) * 100))
+}
+
+print("First Reduction without Normalization")
+compareModels(ibcfTopNdataFrame, ubcfTopNdataFrame)
+```
+
+```{r}
+matrixReduced2 <- as(dataFrame2, "realRatingMatrix")
+evaluationScheme2 <- evaluationScheme(matrixReduced2, method = "split", train = 0.8, given = 5, goodRating = 4)
+trainSet2 <- getData(evaluationScheme2, "train")
+testSet2 <- getData(evaluationScheme2, "known")
+```
+
+```{r}
+ibcf2 <- Recommender(trainSet2, "IBCF", param = list(k = 30, method = "cosine"))
+ibcf2
+
+ubcf2 <- Recommender(testSet2, "UBCF", param = list(nn = 30, method = "cosine"))
+ubcf2
+```
+
+```{r}
+ibcfTopNList2 <- predict(ibcf2, testSet2, n = 15)
+ibcfTopNList2
+
+ubcfTopNList2 <- predict(ubcf2, testSet2, n = 15)
+ubcfTopNList2
+```
+
+```{r}
+getTopNdataFrame <- function(topNList) {
+  counts <- table(unlist(as.array(as(topNList, "list"))))
+  df <- data.frame(Movie = names(counts), Count = unname(counts)) %>%
+    select("Movie", "Count.Freq") %>%
+    rename("Count" = "Count.Freq") %>%
+    arrange(desc(Count))
+  df
+}
+
+ibcfTopNdataFrame2 <- getTopNdataFrame(ibcfTopNList2)
+ibcfTopNdataFrame2
+
+ubcfTopNdataFrame2 <- getTopNdataFrame(ubcfTopNList2)
+ubcfTopNdataFrame2
+```
+
+```{r}
+library(dplyr)
+compareModels <- function(ibcf, ubcf) {
+  stopifnot(is.data.frame(ibcf))
+  stopifnot(is.data.frame(ubcf))
+  print(paste("Recommendations IBCF:", nrow(ibcf)))
+  print(paste("Recommendations UBCF:", nrow(ubcf)))
+
+  intersect_ <- intersect(ibcf$Movie, ubcf$Movie)
+
+  print(paste("Similar recommendations:", length(intersect_)))
+  print(paste("Proportion IBCF:", length(intersect_) / nrow(ibcf) * 100))
+  print(paste("Proportion UBCF:", length(intersect_) / nrow(ubcf) * 100))
+}
+
+print("First Reduction without Normalization")
+compareModels(ibcfTopNdataFrame2, ubcfTopNdataFrame2)
+```
+First Reduction Set:
+IBCF recommends 398 movies.
+UBCF recommends 231 movies.
+The intersect between both recommenders for the first reduced dataset is 144 movies.
+The relative intersect for IBCF is 36% and for UBCF it is 62%.
+
+Second Reduction Set:
+IBCF recommends 363 movies.
+UBCF recommends 236 movies.
+The intersect between both recommenders for the first reduced dataset is 112 movies.
+The relative intersect for IBCF is 31% and for UBCF it is 47%.
+We see that the intersect is lower than before because we have fewer user ratings to work with.
+
+Both methods are not giving similar recommendations.
+IBCF and UBCF rely on different aspects of the data.
+IBCF measures similarities between items based on user interactions,
+while UBCF measures similarities between users based on their interactions with items.
+The different focus can lead to different sets of recommendations.
+
+2. IBCF vs UBCF, beide mit ordinalen, normalisierten Ratings und Cosine Similarity.
+
+```{r}
+dataFrame1Norm <- dataFrame1
+dataFrame1Norm$rating <- scale(dataFrame1$rating)
+
+#test_that("ratings have mean 0 and sd 1", {
+#  expect_equal(mean(dataFrame1Norm$rating), 0)
+#  expect_equal(sd(dataFrame1Norm$rating), 1)
+#})
+```
+
+```{r}
+matrixReduced1Norm <- as(dataFrame1Norm, "realRatingMatrix")
+evaluationScheme <- evaluationScheme(matrixReduced1Norm, method = "split", train = 0.8, given = 5, goodRating = 4)
+trainSetNorm <- getData(evaluationScheme, "train")
+testSetNorm <- getData(evaluationScheme, "known")
+```
+
+```{r}
+ibcfNorm <- Recommender(trainSet, "IBCF", param = list(k = 30, method = "cosine"))
+ibcfNorm
+
+ubcfNorm <- Recommender(testSet, "UBCF", param = list(nn = 30, method = "cosine"))
+ubcfNorm
+```
+
+```{r}
+ibcfTopNListNorm <- predict(ibcfNorm, testSetNorm, n = 15)
+ibcfTopNListNorm
+
+ubcfTopNListNorm <- predict(ubcfNorm, testSetNorm, n = 15)
+ubcfTopNListNorm
+```
+
+```{r}
+getTopNdataFrame <- function(topNList) {
+  counts <- table(unlist(as.array(as(topNList, "list"))))
+  df <- data.frame(Movie = names(counts), Count = unname(counts)) %>%
+    select("Movie", "Count.Freq") %>%
+    rename("Count" = "Count.Freq") %>%
+    arrange(desc(Count))
+  df
+}
+
+ibcfTopNdataFrameNorm <- getTopNdataFrame(ibcfTopNListNorm)
+ibcfTopNdataFrameNorm
+
+ubcfTopNdataFrameNorm <- getTopNdataFrame(ubcfTopNListNorm)
+ubcfTopNdataFrameNorm
+```
+
+```{r}
+compareModels <- function(ibcf, ubcf) {
+  stopifnot(is.data.frame(ibcf))
+  stopifnot(is.data.frame(ubcf))
+  print(paste("Recommendations IBCF:", nrow(ibcf)))
+  print(paste("Recommendations UBCF:", nrow(ubcf)))
+
+  intersectIbcfUbcf <- intersect(ibcf$Movie, ubcf$Movie)
+
+  print(paste("Similar recommendations:", length(intersectIbcfUbcf)))
+  print(paste("Proportion IBCF:", length(intersectIbcfUbcf) / nrow(ibcf) * 100))
+  print(paste("Proportion UBCF:", length(intersectIbcfUbcf) / nrow(ubcf) * 100))
+}
+
+print("First Reduction with Normalization")
+compareModels(ibcfTopNdataFrameNorm, ubcfTopNdataFrameNorm)
+```
+IBCF with normalized data recommends 389 films.
+UBCF with normalized data recommends 205 films.
+The intersection between the two recommenders for the first reduced data set (normalized) is 122 films.
+The relative intersection for IBCF is 32% and for UBCF 59%.
+The results are similar to those without normalized ratings.
+The UBCF recommendations are lower than before because they include people with the same taste in movies
+and different rating strengths (4 might be a very good rating for some people and not for others).
+Normalized ratings make the recommendations more similar because we group users together.
+
+# 6.7 Analyse Top-N Listen - IBCF vs SVD [8 Punkte]
+Aufgabe 7: Vergleiche Memory-based und Modell-based Recommenders bezüglich Überschneidung der Top-N Empfehlungen
+für den reduzierten Datensatz, analog zur vorangehenden Aufgabe. Vergleiche wie sich der Anteil übereinstimmender
+Empfehlungen der Top-15 Liste verändert für
+
+1. IBCF (Cosine Similarity, 30 Nachbarn, ordinale Ratings) vs Truncated SVD Modelle mit Variation der Anzahl Singulärwerte
+
+Hinweise:
+• Diese Aufgabe ist eine Fortsetzung von Aufgabe 6.
+• Gefordert ist eine vergleichende, statistische Analyse inklusive Visualisierung.
+• Die Anzahl Singulärwert ist zu variieren von 10 auf 20, 30, 40, und 50
+
+```{r}
+n <- 15
+
+# ibcf
+recmod_ibcf_400 <- Recommender(trainData1, method = "IBCF", param = list(method = "Cosine", k = 30))
+rec_ibcf_400 <- as(predict(recmod_ibcf_400, testData1, n = n), "list")
+
+# svd 10
+recmod_svd_400_10 <- Recommender(trainData1, method = "SVD", param = list(k = 10))
+rec_svd_400_10 <- as(predict(recmod_svd_400_10, testData1, n = n), "list")
+
+# svd 20
+recmod_svd_400_20 <- Recommender(trainData1, method = "SVD", param = list(k = 20))
+rec_svd_400_20 <- as(predict(recmod_svd_400_20, testData1, n = n), "list")
+
+# svd 30
+recmod_svd_400_30 <- Recommender(trainData1, method = "SVD", param = list(k = 30))
+rec_svd_400_30 <- as(predict(recmod_svd_400_30, testData1, n = n), "list")
+
+# svd 40
+recmod_svd_400_40 <- Recommender(trainData1, method = "SVD", param = list(k = 40))
+rec_svd_400_40 <- as(predict(recmod_svd_400_40, testData1, n = n), "list")
+
+# svd 50
+recmod_svd_400_50 <- Recommender(trainData1, method = "SVD", param = list(k = 50))
+rec_svd_400_50 <- as(predict(recmod_svd_400_50, testData1, n = n), "list")
+```
+
+
+```{r}
+svd10reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_10[[.x]]
+)) / 15 * 100))
+
+
+svd20reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_20[[.x]]
+)) / 15 * 100))
+
+svd30reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_30[[.x]]
+)) / 15 * 100))
+
+svd40reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_40[[.x]]
+)) / 15 * 100))
+
+svd50reclist <- unlist(names(recmod_ibcf_400) %>% map(~ (sum(
+  rec_ibcf_400[[.x]] %in% rec_svd_400_50[[.x]]
+)) / 15 * 100))
+
+# dataframes
+df_svd_400_10 <- as.data.frame(svd10reclist)
+df_svd_400_20 <- as.data.frame(svd10reclist)
+df_svd_400_30 <- as.data.frame(svd10reclist)
+df_svd_400_40 <- as.data.frame(svd10reclist)
+df_svd_400_50 <- as.data.frame(svd10reclist)
+```
+
+```{r}
+# Create a function to calculate overlap
+calculate_overlap <- function(rec_ibcf, rec_svd, n, model_name) {
+  data.frame(
+    val = names(rec_ibcf) %>%
+      map_dbl(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100),
+    model = model_name
+  )
+}
+
+# Calculate overlap for different SVD configurations
+df_svd_400_10 <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15, "SVD 10")
+df_svd_400_20 <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15, "SVD 20")
+df_svd_400_30 <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15, "SVD 30")
+df_svd_400_40 <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15, "SVD 40")
+df_svd_400_50 <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15, "SVD 50")
+
+# Bind the data frames together
+different_SVD <- bind_rows(
+  df_svd_400_10, df_svd_400_20, df_svd_400_30,
+  df_svd_400_40, df_svd_400_50
+)
+```
+
+We can see from our table that the intersection between the SVD models does not really change.
+
+```{r}
+different_SVD %>%
+  group_by(model) %>%
+  summarise(mean(val))
+```
+
+Now we plot the whole thing to visualize it.
+It looks pretty similar for all of them. There are almost no differences.
+
+```{r}
+ggplot() +
+  geom_histogram(data = different_SVD, aes(val, fill = model), binwidth = 1) +
+  facet_wrap(. ~ model) +
+  labs(
+    x = "Intersections in %",
+    y = "#Users",
+    title = "Intersections of IBCF and various SVD"
+  )
+```
+We calculate svd models with different singular values and make a prediction.
+Then we compare the prediction with an ibcf model.
+We see that the highest overlap value is 0%, then around 8% and then it decreases further.
+This means that for most users there is less or no overlap between the IBCF and SVD models.
+
+SVD reduces the dimensionality of the data by identifying latent features that may not be directly interpretable.
+These latent features represent underlying patterns in the data that are not necessarily related to the explicit
+item similarities that IBCF uses.
+IBCF directly computes similarities between items based on user ratings, without considering latent features.
+If these latent features do not align with the direct item-item ratings similarity, 
+the recommendations from SVD and IBCF will diverge.
+
+# 6.8 Implementierung Top-N Metriken [16 Punkte]
+
+8. Implementiere Funktionen, um aus den Top-N Listen aller Nutzer*innen die Item-space
+Coverage@N und Novelty@N eines Recommenders zu beurteilen.
+Visualisiere diese System-Metriken als Scatterplot “Novelty vs Coverage” für Top-N Listen der Länge N = 5,
+10, 15, 20, 25, 30 mit
+1. IBCF (Cosine Similarity, 30 Nachbarn)
+
+Hinweise:
+• Diese Aufgabe dient dazu die zentrale Frage der Evaluierung von Recommender Systemen zu vertiefen und dient als Input für die Entscheidung von Aufgabe 9.
+• Die eigene Implementierung ist sinnvoll zu testen und zu dokumentieren
+
+```{r}
+coverageN <- function(dataset, model, n) {
+  model <- Recommender(dataset, model, param = list(k = n, method = "cosine"))
+  topN <- predict(model, dataset, n = 15)
+  listItems <- unique(
+    unlist(
+      as(topN, "list"),
+      use.names = FALSE
+    )
+  )
+  coverageN <- length(listItems) / nrow(dataset) * 100
+  return(coverageN)
+}
+```
+
+```{r}
+data(MovieLense)
+coverage = coverageN(MovieLense, "IBCF", 15)
+paste("Coverage at N for Movie Lense: ", coverage)
+```
+
+```{r}
+nValues <- c(5, 10, 15, 20, 25, 30)
+coverage_values <- c()
+
+paste("Coverage at N for Movie Lense")
+for (n in nValues) {
+  coverage <- coverageN(MovieLense, "IBCF", n)
+  coverage_values <- c(coverage_values, coverage)
+  print(paste("Coverage for n =", n, round(coverage, 4)))
+}
+```
+If we recommend 5 items to each user, the model recommends about 58 percent of all movies,
+whereas 42 percent of all movies are never recommended.
+On the other hand, if we recommend 30 movies to each user, the model recommends about 74 percent
+of all movies, while 26 percent of all movies are never recommended.
+This is because the more movies we recommend, the more obscure movies will be recommended.
+
+2. Truncated SDV (30 Singulärwerte).
+
+```{r}
+library(recommenderlab)
+library(ggplot2)
+
+coverage_at_n <- function(recommender, data, N) {
+  all_items <- unique(colnames(data))
+  top_n_items <- unique(unlist(getTopN(recommender, data, n = N)))
+  return(length(top_n_items) / length(all_items))
+}
+
+novelty_at_n <- function(recommender, data, N) {
+  top_n_recommendations <- getTopN(recommender, data, n = N)
+  novelty_scores <- unlist(lapply(top_n_recommendations, function(x) mean(item_popularity[unlist(x)])))
+  return(mean(novelty_scores))
+}
+
+item_popularity <- rowSums(MovieLense)
+
+# Calculate metrics for different N values
+N_values <- c(5, 10, 15, 20, 25, 30)
+metrics <- data.frame(N = N_values, Coverage_IBCF = NA, Novelty_IBCF = NA, Coverage_SVD = NA, Novelty_SVD = NA)
+ibcf_recommender <- Recommender(MovieLense, method = "IBCF", param = list(k = 30, method = "Cosine"))
+svd_recommender <- Recommender(MovieLense, method = "SVD", param = list(k = 30))
+
+for (N in N_values) {
+  metrics[metrics$N == N, "Coverage_IBCF"] <- coverage_at_n(ibcf_recommender, MovieLense, N)
+  metrics[metrics$N == N, "Novelty_IBCF"] <- novelty_at_n(ibcf_recommender, MovieLense, N)
+  metrics[metrics$N == N, "Coverage_SVD"] <- coverage_at_n(svd_recommender, MovieLense, N)
+  metrics[metrics$N == N, "Novelty_SVD"] <- novelty_at_n(svd_recommender, MovieLense, N)
+}
+```
+
+Coverage Increases with N, for both IBCF and SVD.
+This is expected since a larger N allows the recommender to cover more items from the item space.
+In the plot we see the Trade-off between Novelty and Coverage, which says that a good recommender system 
+should ideally have high Coverage (suggesting it can recommend a diverse set of items)
+and high Novelty (indicating it can suggest new or less-known items).
+
+# 6.9 Wahl des optimalen Recommenders [20 Punkte]
+Aufgabe 9: Bestimme aus 5 unterschiedlichen Modellen das für Top-N Empfehlungen “beste” Modell und
+verwende zusätzlich einen Top-Movie Recommender.
+1. Verwende für die Evaluierung 10-fache Kreuzvalidierung,
+2. Begründe deine Wahl von Metriken und Modell,
+3. Analysiere das “beste” Modell für Top-N Recommendations mit N = 10, 15, 20, 25 und 30,
+4. Optimiere das “beste” Modell hinsichtlich Hyperparametern.
+
+First, we determine what is our good rating.
+We are looking for a balanced ratio between "good" and "bad" ratings and a similar sensitivity and specificity.
+We therefore choose 0.5 as the quantile, which we quantify as good.
+
+```{r}
+gR <- quantile(merged_data$rating, 0.5)
+gR
+```
+
+We choose the following models:
+SVD
+IBCF cosine
+UBCF cosine
+IBCF Pearson
+UBCF Pearson
+
+Why did we choose these models:
+
+SVD (Singular Value Decomposition): SVD is a widely used matrix factorization technique that responds well to latent factors in the data. It is known for its good performance in discovering patterns in large data sets.
+
+IBCF (Item-Based Collaborative Filtering) with Cosine Similarity: IBCF is based on similarity between items and is well suited for datasets with clear item similarities. Cosine similarity is a simple and effective method to measure the similarity between items.
+
+UBCF (User-Based Collaborative Filtering) with Cosine similarity: UBCF looks at the similarity between users. Cosine similarity is also used here to calculate the similarity between user profiles.
+
+IBCF with Pearson similarity: Pearson similarity can also be used for IBCF instead of Cosine similarity. Pearson similarity takes into account the centering of the data and may be preferred in certain scenarios.
+
+UBCF with Pearson similarity: Analogous to IBCF, but for users instead of elements.
+
+```{r}
+top_400_scheme <- evaluationScheme(
+  matrixReduced1,
+  goodRating = gR,
+  method = "cross-validation",
+  k = 10,
+  given = 20
+)
+
+approaches <- list(
+  "Popular movies" = list(name = "POPULAR", param = NULL),
+  "SVD" = list(name = "SVD", param = list(k = 30)),
+  "IBCF cosinus" = list(
+    name = "IBCF",
+    param = list(method = "Cosine", k = 30)
+  ),
+  "IBCF Pearson" = list(
+    name = "IBCF",
+    param = list(method = "Pearson", k = 30)
+  ),
+  "UBCF cosinus" = list(
+    name = "UBCF",
+    param = list(method = "Cosine", k = 30)
+  ),
+  "UBCF Pearson" = list(
+    name = "UBCF",
+    param = list(method = "Pearson", nn = 30)
+  )
+)
+
+steps <- c(10, 15, 20, 25, 30)
+```
+
+Now we plot the 5 models for data_400
+
+We use True Positive Rate (TPR) and False Positive Rate (FPR) as metrics:
+
+True Positive Rate (TPR):
+Proportion of true positive instances that were correctly predicted as positive by the model.
+  Formula: TPR = TP / (TP + FN)
+  TP (True Positive): Number of instances correctly predicted as positive.
+  FN (False Negative): Number of instances falsely predicted as negative.
+
+False Positive Rate (FPR):
+FPR is the proportion of true negative instances that were incorrectly predicted as positive by the model.
+  Formula: FPR = FP / (FP + TN)
+  FP (False Positive): Number of instances falsely predicted as positive.
+  TN (True Negative): Number of instances correctly predicted as negative.
+
+```{r}
+comparemod400 <- evaluate(top_400_scheme, approaches,
+  n = steps, type = "topNList",
+  progress = FALSE
+)
+
+plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
+```
+
+Plot Interpretation: Generally, a model that produces a curve closer to the top left corner of
+the plot (high TPR, low FPR) would be considered better performing.
+The plot suggests that there are differences in how each model performs,
+with some trade-offs between TPR and FPR.
+
+But perhaps the SVD model can still be be optimized with the help of hyperparameters.
+
+## 6.9.4 Hyperparameter
+The default value of gamna is 0.015
+The default value of lambda is 0.001 (https://rdrr.io/cran/recommenderlab/src/R/RECOM_SVDF.R)
+The default value of lambda is 0.001
+
+```{r}
+top_400_scheme <- evaluationScheme(matrixReduced1,
+  goodRating = gR,
+  method = "cross-validation",
+  k = 10, given = 20
+)
+
+approaches <- list(
+  "Popular movies" = list(name = "POPULAR", param = NULL),
+  "SVD lambda 0.0001" = list(
+    name = "SVD",
+    lambda = 0.0001,
+    param = list(k = 50)
+  ),
+  "SVD lambda def(0.001)" = list(
+    name = "SVD",
+    lambda = 0.001,
+    param = list(k = 50)
+  ),
+  "SVD lambda 0.002" = list(
+    name = "SVD",
+    lambda = 0.002,
+    param = list(k = 50)
+  ),
+  "SVD lambda 0.005" = list(
+    name = "SVD",
+    lambda = 0.005,
+    param = list(k = 50)
+  ),
+  "SVD lambda 0.01" = list(
+    name = "SVD",
+    lambda = 0.01,
+    param = list(k = 50)
+  ),
+  "SVD lambda 0.02" = list(
+    name = "SVD",
+    lambda = 0.02,
+    param = list(k = 50)
+  )
+)
+
+comparemod400 <- evaluate(top_400_scheme, approaches, n = steps, type = "topNList", progress = FALSE)
+
+plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
+```
+The plot provided gives us insight into how different values of lambda should impact the True Positive Rate (TPR)
+and False Positive Rate (FPR) for the SVD recommender compared to a baseline 'Popular movies' recommender.
+By varying lambda, we should observe changes in the ROC curve, which indicate the trade-off between the TPR and
+FPR at different thresholds, but thats not the case.
+We could not figure out how to tune the hyperparameters,
+therefore, all combinations deliver the same results and are on top of each other.
+
+# 6.10 Implementierung Top-N Monitor [20 Punkte]
+Aufgabe 10 (DIY): Untersuche die relative Übereinstimmung zwischen Top-N Empfehlungen und
+präferierten Filmen für das “beste” Modell und zwei weiteren Modelle bzw. -parametrisierungen.
+1. Fixiere 20 zufällig gewählte Testnutzer*innen für alle Modellvergleiche,
+2. Bestimme pro Nutzer*in den Anteil nach Genres seiner Top-Filme (=Filme mit besten Bewertungen),
+3. Vergleiche pro Nutzer*in Top-Empfehlungen vs Top-Filme nach Genres,
+4. Definiere eine Qualitätsmetrik für Top-N Listen und teste sie
+
+Diese Aufgabe ist eine Fortsetzung von Aufgabe 9.
+• Der Top-N Monitor erlaubt zu überprüfen, ob die gemachten Empfehlungen den Präferenzen der
+Nutzer*innen entsprechen und verwendet eine einfach verständliche Visualisierung.
+• Die eigene Implementierung einer Qualitätsmetrik ist gründlich zu prüfen und zu dokumentieren.
+
+```{r}
+getRandomUsers <- function(data, nUsers, seed) {
+  set.seed(seed)
+  Users <- sample(1:nrow(data), nUsers)
+  dataTest <- data[Users, ]
+  return(Users)
+}
+
+getRandomDataset <- function(data, nUsers, seed) {
+  set.seed(seed)
+  Users <- sample(1:nrow(data), nUsers)
+  dataTest <- data[Users, ]
+  return(dataTest)
+}
+```
+
+```{r}  
+Users <- getRandomUsers(MovieLense, 20, 42)
+Users400Random <- getRandomUsers(matrixReduced1, 20, 42)
+Users600Random <- getRandomUsers(matrixReduced2, 20, 42)
+Data <- getRandomDataset(MovieLense, 20, 42)
+Data400 <- getRandomDataset(matrixReduced1, 20, 42)
+Data600 <- getRandomDataset(matrixReduced2, 20, 42)
+```
+
+We have developed two functions, one for the selection of random users
+and one for the selection of random data sets.
+We selected 20 random users from the Movie Lense dataset as well as for both reduced datasets.
+
+2. Bestimme den Anteil der Top-N Empfehlung nach Genres pro Nutzer*in,
+
+```{r}
+svd3 <- Recommender(Data, "SVD", param = list(k = 3))
+ubcf13 <- Recommender(Data, "UBCF", parameter = list(method = "Cosine", nn = 13))
+ibcf22 <- Recommender(Data, "IBCF", param = list(k = 22, method = "cosine"))
+svd6 <- Recommender(Data, "SVD", param = list(k = 6))
+
+svd3_400 <- Recommender(Data400, "SVD", param = list(k = 3))
+ubcf13_400 <- Recommender(Data400, "UBCF", parameter = list(method = "Cosine", nn = 13))
+ibcf22_400 <- Recommender(Data400, "IBCF", param = list(k = 22, method = "cosine"))
+svd6_400 <- Recommender(Data400, "SVD", param = list(k = 6))
+
+svd3_600 <- Recommender(Data600, "SVD", param = list(k = 3))
+ubcf13_600 <- Recommender(Data600, "UBCF", parameter = list(method = "Cosine", nn = 13))
+ibcf22_600 <- Recommender(Data600, "IBCF", param = list(k = 22, method = "cosine"))
+svd6_600 <- Recommender(Data600, "SVD", param = list(k = 6))
+```
+
+```{r}
+N <- 10
+topN_svd3 <- predict(svd3, Data, n = N)
+topN_ubcf13 <- predict(ubcf13, Data, n = N)
+topN_ibcf22 <- predict(ibcf22, Data, n = N)
+topN_svd6 <- predict(svd6, Data, n = N)
+```
+
+```{r}
+getTopNRec <- function(users, dataset, model) {
+  topN_model <- predict(model, dataset, n = 10)
+  topN_list <- as(topN_model, "list")
+  topN_tibble <- as_tibble(topN_list)
+  topN_dataFrame <- as.data.frame(topN_tibble)
+  colnames(topN_dataFrame) <- Users
+  topN_dataFrame_T <- t(topN_dataFrame)
+  topN_dataFrame_T_tibble <- as_tibble(topN_dataFrame_T)
+  topN_dataFrame_T_tibble$Users <- Users
+  topN_dataFrame_T_tibble_long <- pivot_longer(
+    topN_dataFrame_T_tibble,
+    cols = 1:10, names_to = "topN", values_to = "ID"
+  )
+  topN_dataFrame_T_tibble_long_genre <- left_join(
+    topN_dataFrame_T_tibble_long, MovieLenseMeta,
+    by = c("ID" = "title")
+  )
+  topNTibble <- select(
+    topN_dataFrame_T_tibble_long_genre, -topN, -year, -url, -ID
+  )
+  topNRec <- topNTibble %>%
+    group_by(Users) %>%
+    summarise(across(everything(), ~ sum(., is.na(.), 0)))
+}
+```
+
+```{r}
+# resultsList are top n recommendations for m models for random users for k datasets
+resultsList <- list()
+resultsList400 <- list()
+resultsList600 <- list()
+modelsList <- list(svd3, ubcf13, ibcf22, svd6)
+modelsList400 <- list(svd3_400, ubcf13_400, ibcf22_400, svd6_400)
+modelsList600 <- list(svd3_600, ubcf13_600, ibcf22_600, svd6_600)
+for (j in 1:length(modelsList)) {
+  topNRec <- getTopNRec(Users, Data, modelsList[[j]])
+  topNRec400 <- getTopNRec(Users400, Data400, modelsList400[[j]])
+  topNRec600 <- getTopNRec(Users600, Data600, modelsList600[[j]])
+  resultsList[[j]] <- topNRec
+  resultsList400[[j]] <- topNRec400
+  resultsList600[[j]] <- topNRec600
+}
+```
+
+Here are the watched genres per user for svd3
+```{r}
+resultsList[1]
+```
+
+Here are the watched genres per user for ubcf13
+```{r}
+resultsList[2]
+```
+
+Here are the watched genres per user for ibcf22
+```{r}
+resultsList[3]
+```
+Here are the watched genres per user for  svd6
+```{r}
+resultsList[4]
+```
+
+## 6.10.3 Bestimme pro Nutzer*in den Anteil nach Genres seiner Top-Filme (=Filme mit besten Bewertungen),
+
+```{r}
+MovieLenseFjoin <- full_join(
+  (as(MovieLense, "data.frame")), MovieLenseMeta,
+  by = c("item" = "title")
+) %>%
+  select(-c("year", "url"))
+```
+
+
+```{r}
+getFavMovByGenre <- function(users) {
+  userFavorites <- MovieLenseFjoin %>%
+    filter(user %in% Users, rating == 5) %>%
+    group_by(user) %>%
+    summarise(across(c(unknown, Action, Adventure, Animation, `Children's`, Comedy, Crime, Documentary, Drama, Fantasy, `Film-Noir`, Horror, Musical, Mystery, Romance, `Sci-Fi`, Thriller, War, Western), sum)) %>%
+    mutate(user = as.numeric(user)) %>%
+    arrange(user)
+  return(userFavorites)
+}
+
+userFavorites <- getFavMovByGenre(Users)
+userFavorites400 <- getFavMovByGenre(Users400Random)
+userFavorites600 <- getFavMovByGenre(Users600Random)
+```
+
+We have created a usersFavorites matrix where each column represents the genre and each row represents a user.
+The numbers in the matrix are the sum of the ratings for all the movies the user has given.
+We will compare this matrix with the model recommendation to see how the model performs.
+
+## 6.10.4 Vergleiche pro Nutzer*in Top-Empfehlungen vs Top-Filme nach Genres
+
+```{r}
+topNRec <- getTopNRec(users = Users, dataset = Data, model = svd3)[1, 2:20]
+userFav <- userFavorites[1, 2:20]
+
+bind <- rbind(topNRec, userFav)
+bind <- bind %>% add_column(Type = c("topNRec", "topNUser"))
+bind
+```
+```{r}
+bindPivot <- pivot_longer(bind, cols = 1:19, names_to = "genre", values_to = "value")
+```
+
+```{r}
+ggplot(bindPivot, aes(y = genre, x = value)) +
+  geom_point(aes(color = Type)) +
+  geom_line(aes(group = genre)) +
+  labs(title = "Top-N Recommendations vs Top Movies per genre (MovieLense Full)", x = "Value", y = "Genre") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_minimal()
+```
+
+```{r}
+makeCleveland <- function(topNRec, userFav, datatext, text) {
+  bind <- rbind(topNRec, userFav)
+  bind <- bind %>% add_column(Type = c("topNRec", "topNUser"))
+  bind <- pivot_longer(bind, cols = 1:19, values_to = "value", names_to = "genre")
+  ggplot(bind, aes(y = genre, x = value)) +
+    geom_point(aes(color = Type)) +
+    geom_line(aes(group = genre)) +
+    theme_minimal() +
+    labs(title = paste("Top-N Recommendations vs Top Movies per genre", text, " ", datatext), x = "Value", y = "Genre") +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+```
+
+```{r}
+# for each model and each dataset we want a cleveland plot
+listModel <- list("SVD3", "UBCF13", "IBCF22", "SVD_6")
+dataSetNames <- list("For data 400", "For data 600")
+userFavoritesLense400600 <- list(userFavorites, userFavorites400, userFavorites600)
+
+# MovieLense
+for (i in 1:length(listModel)) {
+  dataTitle <- "MovieLense"
+  modelName <- listModel[i]
+  b_df <- userFavorites[1, 2:20]
+  a_df <- resultsList[[i]][1, 2:20]
+  print(makeCleveland(a_df, b_df, dataTitle, modelName))
+}
+# Dataset Reduced 400
+for (i in 1:length(listModel)) {
+  dataTitle <- "DS 400"
+  modelName <- listModel[i]
+  b_df <- userFavorites400[1, 2:20]
+  a_df <- resultsList400[[i]][1, 2:20]
+  print(makeCleveland(a_df, b_df, dataTitle, modelName))
+}
+# Dataset Reduced 600
+for (i in 1:length(listModel)) {
+  dataTitle <- "DS 600"
+  modelName <- listModel[i]
+  b_df <- userFavorites600[1, 2:20]
+  a_df <- resultsList600[[i]][1, 2:20]
+  print(makeCleveland(a_df, b_df, dataTitle, modelName))
+}
+```
+As a visual quality measure for top N-lists from various recommenders, we have chosen the Cleveland Plot.
+The Cleveland Plot shows and compares several variables and in the case of
+of top N-lists, it allows a comparison between the users favorite movies and the movies recommended by the model.
+In the plot we see overlapping data points, which means that the model has recommended the same amount of movies as the user has rated.
+The further apart the data points are, the more the user's preferences and the model's recommendation deviates.
+
+## 6.10.5 Definiere eine Qualitätsmetrik für Top-N Listen und teste sie
+As a good choice for a test metric, we compared cosine similarity and absolute difference.
+
+```{r}
+getMeanAbsoluteDifference <- function(df1, df2) {
+  matrix1 <- as.matrix(df1)
+  matrix2 <- as.matrix(df2)
+  if (!all(dim(matrix1) == dim(matrix2))) {
+    stop("The dimensions of the two matrices must be the same.")
+  }
+  absDifferences <- abs(matrix1 - matrix2)
+  meanAbsDifference <- mean(absDifferences, na.rm = TRUE)
+  return(meanAbsDifference)
+}
+MAE1 <- getMeanAbsoluteDifference(resultsList[[1]][,2:20], userFavorites[,2:20])
+MAE2 <- getMeanAbsoluteDifference(resultsList[[2]][,2:20], userFavorites[,2:20])
+MAE3 <- getMeanAbsoluteDifference(resultsList[[3]][,2:20], userFavorites[,2:20])
+MAE4 <- getMeanAbsoluteDifference(resultsList[[4]][,2:20], userFavorites[,2:20])
+
+MAE1_400 <- getMeanAbsoluteDifference(resultsList400[[1]][,2:20], userFavorites400[,2:20])
+MAE2_400 <- getMeanAbsoluteDifference(resultsList400[[2]][,2:20], userFavorites400[,2:20])
+MAE3_400 <- getMeanAbsoluteDifference(resultsList400[[3]][,2:20], userFavorites400[,2:20])
+MAE4_400 <- getMeanAbsoluteDifference(resultsList400[[4]][,2:20], userFavorites400[,2:20])
+
+MAE1_600 <- getMeanAbsoluteDifference(resultsList600[[1]][,2:20], userFavorites600[,2:20])
+MAE2_600 <- getMeanAbsoluteDifference(resultsList600[[2]][,2:20], userFavorites600[,2:20])
+MAE3_600 <- getMeanAbsoluteDifference(resultsList600[[3]][,2:20], userFavorites600[,2:20])
+MAE4_600 <- getMeanAbsoluteDifference(resultsList600[[4]][,2:20], userFavorites600[,2:20])
+
+paste("Full Movie Lense")
+paste("This was the MAE for SVD 3", MAE1)
+paste("This was the MAE for UBCF 13 (Cosine)", MAE2)
+paste("This was the MAE for IBCF 22 (Cosine)", MAE3)
+paste("This was the MAE for SVD 6", MAE4)
+
+paste("Reduced Data Set 400")
+paste("This was the MAE for SVD 3", MAE1_400)
+paste("This was the MAE for UBCF 13 (Cosine)", MAE2_400)
+paste("This was the MAE for IBCF 22 (Cosine)", MAE3_400)
+paste("This was the MAE for SVD 6", MAE4_400)
+
+paste("Reduced Data Set 600 (200 up to 600 users)")
+paste("This was the MAE for SVD 3", MAE1_600)
+paste("This was the MAE for UBCF 13 (Euclidean)", MAE2_600)
+paste("This was the MAE for IBCF 22 (Cosine)", MAE3_600)
+paste("This was the MAE for SVD 6", MAE4_600)
+```
+The disadvantage of the MAE is that it is hard to tell when the score is high or not.
+It depends on several factors, like:
+Rating Scale 
+Dataset and Domain Specifics 
+Comparison with Baselines
+User Satisfaction
+Distribution of Errors
+Goal of the Recommendation System
+It is therefore difficult to say whether our models have made correct predictions.
+
+Let us look at the cosine similarity.
+
+```{r}
+calculateCosineSimilarity <- function(df1, df2) {
+  matrix1 <- as.matrix(df1)
+  matrix2 <- as.matrix(df2)
+  
+  if (!all(dim(matrix1) == dim(matrix2))) {
+    stop("The dimensions of the two matrices must be the same.")
+  }
+
+  cosineSimilarity <- function(vec1, vec2) {
+    sum(vec1 * vec2) / (sqrt(sum(vec1^2)) * sqrt(sum(vec2^2)))
+  }
+  
+  similarities <- mapply(cosineSimilarity, as.data.frame(t(matrix1)), as.data.frame(t(matrix2)))
+  
+  meanSimilarity <- mean(similarities, na.rm = TRUE)
+  return(meanSimilarity)
+}
+
+cosine1 <- calculateCosineSimilarity(resultsList[[1]][,2:20], userFavorites[,2:20])
+cosine2 <- calculateCosineSimilarity(resultsList[[2]][,2:20], userFavorites[,2:20])
+cosine3 <- calculateCosineSimilarity(resultsList[[3]][,2:20], userFavorites[,2:20])
+cosine4 <- calculateCosineSimilarity(resultsList[[4]][,2:20], userFavorites[,2:20])
+
+cosine1_400 <- calculateCosineSimilarity(resultsList400[[1]][,2:20], userFavorites[,2:20])
+cosine2_400 <- calculateCosineSimilarity(resultsList400[[2]][,2:20], userFavorites[,2:20])
+cosine3_400 <- calculateCosineSimilarity(resultsList400[[3]][,2:20], userFavorites[,2:20])
+cosine4_400 <- calculateCosineSimilarity(resultsList400[[4]][,2:20], userFavorites[,2:20])
+
+cosine1_600 <- calculateCosineSimilarity(resultsList600[[1]][,2:20], userFavorites[,2:20])
+cosine2_600 <- calculateCosineSimilarity(resultsList600[[2]][,2:20], userFavorites[,2:20])
+cosine3_600 <- calculateCosineSimilarity(resultsList600[[3]][,2:20], userFavorites[,2:20])
+cosine4_600 <- calculateCosineSimilarity(resultsList600[[4]][,2:20], userFavorites[,2:20])
+
+paste("Full Movie Lense")
+paste("This was the Cosine for SVD 3", cosine1)
+paste("This was the Cosine for UBCF 13 (Euclidean)", cosine2)
+paste("This was the Cosine for IBCF 22 (Cosine)", cosine3)
+paste("This was the Cosine for SVD 6", cosine4)
+
+paste("Reduced Data Set 400")
+paste("This was the Cosine for SVD 3", cosine1_400)
+paste("This was the Cosine for UBCF 13 (Cosine)", cosine2_400)
+paste("This was the Cosine for IBCF 22 (Cosine)", cosine3_400)
+paste("This was the Cosine for SVD 6", cosine4_400)
+
+paste("Reduced Data Set 600 (200 up to 600 users)")
+paste("This was the Cosine for SVD 3", cosine1_600)
+paste("This was the Cosine for UBCF 13 (Cosine)", cosine1_600)
+paste("This was the Cosine for IBCF 22 (Cosine)", cosine1_600)
+paste("This was the Cosine for SVD 6", cosine1_600)
+```
+We choose the cosine instead of the mean absolute error because it is clear that
+if the metric is close to 1, the vectors are more similar.
+We took the mean of all cosine similarities across n users,
+to obtain a single measure between the user preference and model prediction vectors.
+This gave us a single measure that we could use to create a summary statistic to help interpret and compare the overall similarity of user preferences.
+For the mean absolute error, this was not so clear.
+The best model we could find in the previous chapter was an SVD model with k singular values.
+Here, SVD provides the best overall result for the reduced data set with 400 highest rated users.
+
+
+
