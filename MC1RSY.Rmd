@@ -1,26 +1,24 @@
 ---
 title: "MC1RSY"
 author: "Tobias Lauber, Haris Alic"
-date: "2023-10-05"
+date: "2023-12-15"
 output: html_document
 ---
-# 1. Load librarys
-```{r setup, include=FALSE}
+
+```{r}
 library(tidyverse)
 library(recommenderlab)
-library(lsa) # might need for cosine function
+library(lsa)
 library(dplyr)
-library(tidyr) # for plot
+library(tidyr)
 ```
 
-für Kapitel in Outline schauen. Kapitel starten mit Hash. Unterkapitel mit hashhash. unter unter hashhashhash
 
-# 2. load data
-```{r cars}
+```{r}
 data("MovieLense")
 str(MovieLense)
 ```
-## 2.1 Own testing
+
 ```{r}
 summary(MovieLense)
 ```
@@ -30,10 +28,7 @@ class(MovieLense)
 ```
 see it as data frame
 ```{r}
-# Convert the realRatingMatrix to a data frame
 movie_data <- as(MovieLense, "data.frame")
-
-# View the first few rows of the data frame
 head(movie_data, 20)
 ```
 ```{r}
@@ -131,7 +126,6 @@ Which in turn can lead to even more people watching dramas and reinforce the bia
 An additional problem is that the same movie can be categorized in multiple genres, 
 which can be misleading for the interpretation of the data.
 
-## 6.1  
 2. Wie verteilen sich die Nutzerratings der Filme gesamthaft bzw. nach Genres?
 
 ```{r}
@@ -205,16 +199,15 @@ ggplot(
   ggtitle("Distribution of User Ratings by Genre") +
   theme_minimal()
 
-# test stuff
-test_that("There are more genreRatings because one movie can be specified as multiple genres", {
-  expect_false(identical(nrow(genreRatings), nrow(df)))
-})
+## test stuff
+#test_that("There are more genreRatings because one movie can be specified as multiple genres", {
+#  expect_false(identical(nrow(genreRatings), nrow(df)))
+#})
 ```
 The distribution of user ratings is overall positive, with the majority of users rating 3 or higher.
 3, 4 and 5 dominate the ratings, but the problem with 3 is that there are users for whom a 3-star rating is a bad rating and for others it is a good rating.
 We will see how to deal with this problem later.
 
-## 6.1 
 3. Wie verteilen sich die mittleren Ratings pro Film bzw. pro Nutzer*in?
 
 ```{r}
@@ -293,7 +286,6 @@ ggplot(data = average_ratings_per_user, aes(x = mean_rating)) +
   - The highest frequency for individual users is between 3.5 and 4.
     That means the average user tends to rate movies generally positive.
 
-## 6.1 
 4. Welchen Einfluss hat die Normierung der Ratings pro Nutzer*in auf die Verteilung der mittleren Nutzer-ratings?
 
 ```{r}
@@ -336,10 +328,9 @@ avgNormRatingUser <- dfNorm %>%
   summarize(avgRating = mean(rating)) %>%
   arrange(desc(avgRating))
 
-# test that the mean is around zero
-test_that("The mean is around zero", {
-  expect_true(all.equal(mean(avgNormRatingUser$avgRating), 0, tolerance = 0.01))
-})
+#test_that("The mean is around zero", {
+#  expect_true(all.equal(mean(avgNormRatingUser$avgRating), 0, tolerance = 0.01))
+#})
 
 # Visualize for a subset of users for non normalized data
 df %>%
@@ -378,14 +369,11 @@ dfNorm %>%
   Before normalization, we do not see a clear difference between users rating preferences,
   while after normalization we see the similarities between users and their rating preferences, whether negative or positive.
 
-## 6.1 
-
 5. Welche strukturellen Charakteristika und Auffälligkeiten zeigt die User-Item Matrix?
 
 ```{r}
 # install.packages("viridis")
 library(viridis)
-# Set a random seed for reproducibility
 set.seed(42)
 
 smallM <- MovieLense[
@@ -581,7 +569,6 @@ The second reduced data frame takes the most active 600 users, but cuts out the 
 We see that the sparsity increases to 88 percent.
 The first 200 most active users are no longer present, so we have a higher sparsity.
 
-## 6.2
 3. Zusatz für Gruppen: Quantifiziere die “Intersection over Union” aller reduzierten Datensätze paarweise.
 
 ```{r}
@@ -705,7 +692,6 @@ The heatmap with more dots (or less white space) could be the one with more acti
 refers to the frequency or volume of ratings given by users. More active users usually lead to a
 denser similarity matrix as there are more data points to calculate the similarities between each item
 
-## 6.3 
 3. Bestimme die Filme, die am häufigsten in der Cosine-Ähnlichkeitsmatrix auftauchen und analyisiere Vorkommen und Ratings im reduzierten Datensatz.
 generelle Verteilung der Anzahl an 'Auftauchen' in der Cosine Ähnlichkeitsmatrix
 
@@ -893,13 +879,14 @@ for (given in given_values) {
 ```
 
 The IBCF Recommender uses a test set of user profiles that are not part of the training but of the predictions.
-Additionally, there is a set of masked ratings to evaluate the prediction. For the masking, we use the Given-x parameter, which is a random selection 
+Additionally, there is a set of masked ratings to evaluate the prediction.
+For the masking, we use the Given-x parameter, which is a random selection 
 from all test users for the prediction, the rest is part of the evaluation.
 It turns out that the same result is not always achieved for different given values,
 e.g. the recommendation results for Given = 5 differ from those of the others.
 We can state the same for the second data set.
 
-## 6.4
+# 6.4 Implementierung Ähnlichkeitsmatrix
 Aufgabe 4 (DIY): Implementiere Funktionen zur Berechnung von Ähnlichkeitsmatrizen bei IBCF Recommenders für 
 (a) Cosine Similarity mit ordinale Ratings und 
 (b) Jaccard Similarity mit binären Ratings
@@ -983,7 +970,7 @@ all.equal(cosinus_sim, proxy_cosine)
 ```
 We see that there is almost no difference between our custom implementation and the proxy cosine.
 
-# Runtime
+Calculate the Runtimes
 ```{r}
 startTime <- Sys.time()
 cosineSimMatrix <- getCosineSim(oursample_Matrix)
@@ -1161,8 +1148,7 @@ We do not see any intersect between the recommendations of the two models.
 3. Visualisiere und diskutiere für alle Testnutzer*innen summarisch die 
    Verteilung der Top-15 Empfehlungen von IBCF und UBCF.
 ```{r}
-# Assuming 'top15_ibcf' and 'top15_ubcf' are lists of character vectors containing movie titles
-# Let's first combine all recommendations into a single vector for each method
+# combine all recommendations into a single vector for each method
 all_ibcf <- unlist(top15_ibcf)
 all_ubcf <- unlist(top15_ubcf)
 
@@ -1174,23 +1160,17 @@ freq_ubcf <- table(all_ubcf)
 df_ibcf <- as.data.frame(freq_ibcf)
 df_ubcf <- as.data.frame(freq_ubcf)
 
-# Rename the columns for clarity
 names(df_ibcf) <- c("Movie", "IBCF_Count")
 names(df_ubcf) <- c("Movie", "UBCF_Count")
 
-# Merge the two data frames by movie titles
 df_combined <- merge(df_ibcf, df_ubcf, by = "Movie", all = TRUE)
 
-# Replace NAs with zeros
 df_combined[is.na(df_combined)] <- 0
 
-# Now we can plot the comparison using ggplot2
 library(ggplot2)
 
-# Creating a melted version of the dataframe for ggplot2
 df_melted <- reshape2::melt(df_combined, id.vars = "Movie")
 
-# Plotting
 ggplot(data = df_melted, aes(x = Movie, y = value, fill = variable)) +
   geom_bar(stat = "identity", position = "dodge") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
@@ -1350,7 +1330,6 @@ IBCF recommends 363 movies.
 UBCF recommends 236 movies.
 The intersect between both recommenders for the first reduced dataset is 112 movies.
 The relative intersect for IBCF is 31% and for UBCF it is 47%.
-#TODO
 We see that the intersect is lower than before because we have fewer user ratings to work with.
 
 Both methods are not giving similar recommendations.
@@ -1365,10 +1344,10 @@ The different focus can lead to different sets of recommendations.
 dataFrame1Norm <- dataFrame1
 dataFrame1Norm$rating <- scale(dataFrame1$rating)
 
-test_that("ratings have mean 0 and sd 1", {
-  expect_equal(mean(dataFrame1Norm$rating), 0)
-  expect_equal(sd(dataFrame1Norm$rating), 1)
-})
+#test_that("ratings have mean 0 and sd 1", {
+#  expect_equal(mean(dataFrame1Norm$rating), 0)
+#  expect_equal(sd(dataFrame1Norm$rating), 1)
+#})
 ```
 
 ```{r}
@@ -1509,31 +1488,6 @@ df_svd_400_50 <- as.data.frame(svd10reclist)
 ```
 
 ```{r}
-# # better version of above
-# # Funktion für die Berechnung der Überschneidung
-# calculate_overlap <- function(rec_ibcf, rec_svd, n) {
-#   names(rec_ibcf) %>% map(~ sum(rec_ibcf[[.x]] %in% rec_svd[[.x]]) / n * 100)
-# }
-
-# # Berechnung der Überschneidung für verschiedene SVD-Konfigurationen
-# svd10reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_10, 15)
-# svd20reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_20, 15)
-# svd30reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_30, 15)
-# svd40reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_40, 15)
-# svd50reclist <- calculate_overlap(rec_ibcf_400, rec_svd_400_50, 15)
-
-# # Erstellung von DataFrames
-# df_svd_400_10 <- as.data.frame(svd10reclist)
-# df_svd_400_20 <- as.data.frame(svd20reclist)
-# df_svd_400_30 <- as.data.frame(svd30reclist)
-# df_svd_400_40 <- as.data.frame(svd40reclist)
-# df_svd_400_50 <- as.data.frame(svd50reclist)
-```
-
-
-```{r}
-# einschub, sollte so funktionieren
-
 # Create a function to calculate overlap
 calculate_overlap <- function(rec_ibcf, rec_svd, n, model_name) {
   data.frame(
@@ -1557,15 +1511,17 @@ different_SVD <- bind_rows(
 )
 ```
 
-Wir können an unserer Tabelle sehen, das bei der Intersektion sich zwischen den SVD Modellen sich nicht wirklich etwas verändert.
+We can see from our table that the intersection between the SVD models does not really change.
+
 ```{r}
 different_SVD %>%
   group_by(model) %>%
   summarise(mean(val))
 ```
 
-Nun plotten wir das ganze noch, um es visuell darzustellen.
-Es sieht bei allen ziemlich ähnlich aus. Es gibt fast keine Unterschiede.
+Now we plot the whole thing to visualize it.
+It looks pretty similar for all of them. There are almost no differences.
+
 ```{r}
 ggplot() +
   geom_histogram(data = different_SVD, aes(val, fill = model), binwidth = 1) +
@@ -1617,13 +1573,15 @@ coverageN <- function(dataset, model, n) {
 
 ```{r}
 data(MovieLense)
-coverageN(MovieLense, "IBCF", 15)
+coverage = coverageN(MovieLense, "IBCF", 15)
+paste("Coverage at N for Movie Lense: ", coverage)
 ```
 
 ```{r}
 nValues <- c(5, 10, 15, 20, 25, 30)
 coverage_values <- c()
 
+paste("Coverage at N for Movie Lense")
 for (n in nValues) {
   coverage <- coverageN(MovieLense, "IBCF", n)
   coverage_values <- c(coverage_values, coverage)
@@ -1672,7 +1630,7 @@ for (N in N_values) {
 
 Coverage Increases with N, for both IBCF and SVD.
 This is expected since a larger N allows the recommender to cover more items from the item space.
-Trade-off between Novelty and Coverage is plot, which says that a good recommender system 
+In the plot we see the Trade-off between Novelty and Coverage, which says that a good recommender system 
 should ideally have high Coverage (suggesting it can recommend a diverse set of items)
 and high Novelty (indicating it can suggest new or less-known items).
 
@@ -1684,26 +1642,23 @@ verwende zusätzlich einen Top-Movie Recommender.
 3. Analysiere das “beste” Modell für Top-N Recommendations mit N = 10, 15, 20, 25 und 30,
 4. Optimiere das “beste” Modell hinsichtlich Hyperparametern.
 
-First, we determine our good rating.
+First, we determine what is our good rating.
 We are looking for a balanced ratio between "good" and "bad" ratings and a similar sensitivity and specificity.
-We therefore choose 0.5 as the quantile.
-This is our good rating.
+We therefore choose 0.5 as the quantile, which we quantify as good.
 
 ```{r}
 gR <- quantile(merged_data$rating, 0.5)
 gR
 ```
 
-We choose this models:
+We choose the following models:
 SVD
 IBCF cosine
 UBCF cosine
 IBCF Pearson
 UBCF Pearson
 
-Explanation:
-
-Why do we use the models?
+Why did we choose these models:
 
 SVD (Singular Value Decomposition): SVD is a widely used matrix factorization technique that responds well to latent factors in the data. It is known for its good performance in discovering patterns in large data sets.
 
@@ -1773,12 +1728,12 @@ comparemod400 <- evaluate(top_400_scheme, approaches,
 plot(comparemod400, avg = TRUE, lty = 1, annotate = 1, legend = "topleft")
 ```
 
-Plot Interpretation: Generally, an model that produces a curve closer to the top left corner of
+Plot Interpretation: Generally, a model that produces a curve closer to the top left corner of
 the plot (high TPR, low FPR) would be considered better performing.
 The plot suggests that there are differences in how each model performs,
 with some trade-offs between TPR and FPR.
 
-But perhaps the SVD model can be be optimized with the help of hyperparameters.
+But perhaps the SVD model can still be be optimized with the help of hyperparameters.
 
 ## 6.9.4 Hyperparameter
 The default value of gamna is 0.015
@@ -1834,7 +1789,8 @@ The plot provided gives us insight into how different values of lambda should im
 and False Positive Rate (FPR) for the SVD recommender compared to a baseline 'Popular movies' recommender.
 By varying lambda, we should observe changes in the ROC curve, which indicate the trade-off between the TPR and
 FPR at different thresholds, but thats not the case.
-We dont know where the problem is.
+We could not figure out how to tune the hyperparameters,
+therefore, all combinations deliver the same results and are on top of each other.
 
 # 6.10 Implementierung Top-N Monitor [20 Punkte]
 Aufgabe 10 (DIY): Untersuche die relative Übereinstimmung zwischen Top-N Empfehlungen und
@@ -1863,36 +1819,42 @@ getRandomDataset <- function(data, nUsers, seed) {
   dataTest <- data[Users, ]
   return(dataTest)
 }
-
-randomUsers <- getRandomUsers(MovieLense, 20, 42)
-randomUsers
 ```
 
 ```{r}  
 Users <- getRandomUsers(MovieLense, 20, 42)
+Users400Random <- getRandomUsers(matrixReduced1, 20, 42)
+Users600Random <- getRandomUsers(matrixReduced2, 20, 42)
 Data <- getRandomDataset(MovieLense, 20, 42)
-Users
-Data
+Data400 <- getRandomDataset(matrixReduced1, 20, 42)
+Data600 <- getRandomDataset(matrixReduced2, 20, 42)
 ```
 
 We have developed two functions, one for the selection of random users
 and one for the selection of random data sets.
-We selected 20 random users from the Movie Lense dataset.
+We selected 20 random users from the Movie Lense dataset as well as for both reduced datasets.
 
 2. Bestimme den Anteil der Top-N Empfehlung nach Genres pro Nutzer*in,
 
 ```{r}
 svd3 <- Recommender(Data, "SVD", param = list(k = 3))
-ubcf13 <- Recommender(Data, "UBCF", parameter = list(method = "Euclidean", nn = 13))
+ubcf13 <- Recommender(Data, "UBCF", parameter = list(method = "Cosine", nn = 13))
 ibcf22 <- Recommender(Data, "IBCF", param = list(k = 22, method = "cosine"))
 svd6 <- Recommender(Data, "SVD", param = list(k = 6))
+
+svd3_400 <- Recommender(Data400, "SVD", param = list(k = 3))
+ubcf13_400 <- Recommender(Data400, "UBCF", parameter = list(method = "Cosine", nn = 13))
+ibcf22_400 <- Recommender(Data400, "IBCF", param = list(k = 22, method = "cosine"))
+svd6_400 <- Recommender(Data400, "SVD", param = list(k = 6))
+
+svd3_600 <- Recommender(Data600, "SVD", param = list(k = 3))
+ubcf13_600 <- Recommender(Data600, "UBCF", parameter = list(method = "Cosine", nn = 13))
+ibcf22_600 <- Recommender(Data600, "IBCF", param = list(k = 22, method = "cosine"))
+svd6_600 <- Recommender(Data600, "SVD", param = list(k = 6))
 ```
 
 ```{r}
-# Define the number of top recommendations
 N <- 10
-
-# Generate Top-N recommendations for each model
 topN_svd3 <- predict(svd3, Data, n = N)
 topN_ubcf13 <- predict(ubcf13, Data, n = N)
 topN_ibcf22 <- predict(ibcf22, Data, n = N)
@@ -1910,27 +1872,38 @@ getTopNRec <- function(users, dataset, model) {
   topN_dataFrame_T_tibble <- as_tibble(topN_dataFrame_T)
   topN_dataFrame_T_tibble$Users <- Users
   topN_dataFrame_T_tibble_long <- pivot_longer(
-    topN_dataFrame_T_tibble, cols = 1:10, names_to = "topN", values_to = "ID")
+    topN_dataFrame_T_tibble,
+    cols = 1:10, names_to = "topN", values_to = "ID"
+  )
   topN_dataFrame_T_tibble_long_genre <- left_join(
-    topN_dataFrame_T_tibble_long, MovieLenseMeta, by = c("ID" = "title"))
+    topN_dataFrame_T_tibble_long, MovieLenseMeta,
+    by = c("ID" = "title")
+  )
   topNTibble <- select(
-    topN_dataFrame_T_tibble_long_genre, -topN, -year, -url, -ID)
-  topNRec <- topNTibble %>% group_by(Users) %>%
+    topN_dataFrame_T_tibble_long_genre, -topN, -year, -url, -ID
+  )
+  topNRec <- topNTibble %>%
+    group_by(Users) %>%
     summarise(across(everything(), ~ sum(., is.na(.), 0)))
 }
-topNRec <- getTopNRec(Users, Data, svd3)
-topNRec
 ```
 
-
 ```{r}
+# resultsList are top n recommendations for m models for random users for k datasets
 resultsList <- list()
+resultsList400 <- list()
+resultsList600 <- list()
 modelsList <- list(svd3, ubcf13, ibcf22, svd6)
+modelsList400 <- list(svd3_400, ubcf13_400, ibcf22_400, svd6_400)
+modelsList600 <- list(svd3_600, ubcf13_600, ibcf22_600, svd6_600)
 for (j in 1:length(modelsList)) {
   topNRec <- getTopNRec(Users, Data, modelsList[[j]])
+  topNRec400 <- getTopNRec(Users400, Data400, modelsList400[[j]])
+  topNRec600 <- getTopNRec(Users600, Data600, modelsList600[[j]])
   resultsList[[j]] <- topNRec
+  resultsList400[[j]] <- topNRec400
+  resultsList600[[j]] <- topNRec600
 }
-#resultsList
 ```
 
 Here are the watched genres per user for svd3
@@ -1952,79 +1925,230 @@ Here are the watched genres per user for  svd6
 resultsList[4]
 ```
 
-## 6.10.3
+## 6.10.3 Bestimme pro Nutzer*in den Anteil nach Genres seiner Top-Filme (=Filme mit besten Bewertungen),
 
 ```{r}
 MovieLenseFjoin <- full_join(
-  (as(MovieLense, 'data.frame')), MovieLenseMeta,
+  (as(MovieLense, "data.frame")), MovieLenseMeta,
   by = c("item" = "title")
 ) %>%
-  select(-c( "year", "url"))
-
+  select(-c("year", "url"))
 ```
 
 
 ```{r}
-userFavorites <- MovieLenseFjoin %>% filter(user %in% Users, rating == 5) %>% group_by(user) %>% summarise(across(c(unknown, Action, Adventure, Animation, `Children's`, Comedy, Crime, Documentary, Drama, Fantasy, `Film-Noir`, Horror, Musical, Mystery, Romance, `Sci-Fi`, Thriller, War, Western),sum)) %>% mutate(user = as.numeric(user)) %>%  arrange(user)
+getFavMovByGenre <- function(users) {
+  userFavorites <- MovieLenseFjoin %>%
+    filter(user %in% Users, rating == 5) %>%
+    group_by(user) %>%
+    summarise(across(c(unknown, Action, Adventure, Animation, `Children's`, Comedy, Crime, Documentary, Drama, Fantasy, `Film-Noir`, Horror, Musical, Mystery, Romance, `Sci-Fi`, Thriller, War, Western), sum)) %>%
+    mutate(user = as.numeric(user)) %>%
+    arrange(user)
+  return(userFavorites)
+}
 
-userFavorites
+userFavorites <- getFavMovByGenre(Users)
+userFavorites400 <- getFavMovByGenre(Users400Random)
+userFavorites600 <- getFavMovByGenre(Users600Random)
 ```
 
+We have created a usersFavorites matrix where each column represents the genre and each row represents a user.
+The numbers in the matrix are the sum of the ratings for all the movies the user has given.
+We will compare this matrix with the model recommendation to see how the model performs.
 
-## 6.10.4
+## 6.10.4 Vergleiche pro Nutzer*in Top-Empfehlungen vs Top-Filme nach Genres
+
 ```{r}
-topNRec <- getTopNRec(users = Users, dataset = Data, model = svd3)[1,2:20]
-userFav <- userFavorites[1,2:20]
+topNRec <- getTopNRec(users = Users, dataset = Data, model = svd3)[1, 2:20]
+userFav <- userFavorites[1, 2:20]
 
 bind <- rbind(topNRec, userFav)
 bind <- bind %>% add_column(Type = c("topNRec", "topNUser"))
 bind
 ```
 ```{r}
-bindPivot <- pivot_longer(bind, cols = 1:19, names_to = "genre", values_to = "value") # cols = 1:19 to get rid of Type
+bindPivot <- pivot_longer(bind, cols = 1:19, names_to = "genre", values_to = "value")
 ```
 
 ```{r}
-# create cleveland plot
 ggplot(bindPivot, aes(y = genre, x = value)) +
-  geom_point(aes(color = Type)) + 
-  geom_line(aes(group=genre)) + 
-  labs(title = "Top-N Recommendations vs Top Movies per genre", x = "Value", y = "Genre") +
+  geom_point(aes(color = Type)) +
+  geom_line(aes(group = genre)) +
+  labs(title = "Top-N Recommendations vs Top Movies per genre (MovieLense Full)", x = "Value", y = "Genre") +
   theme(plot.title = element_text(hjust = 0.5)) +
-  theme_minimal() 
+  theme_minimal()
 ```
 
 ```{r}
-makeCleveland <- function(topNRec, userFav, datatext, text){
+makeCleveland <- function(topNRec, userFav, datatext, text) {
   bind <- rbind(topNRec, userFav)
-  bind <- bind %>% add_column(Type = c("topnmonitor_recom", "topnmonitor_fav_movies"))
+  bind <- bind %>% add_column(Type = c("topNRec", "topNUser"))
   bind <- pivot_longer(bind, cols = 1:19, values_to = "value", names_to = "genre")
   ggplot(bind, aes(y = genre, x = value)) +
-    geom_point(aes(color = Type)) + 
-    geom_line(aes(group=genre)) + 
+    geom_point(aes(color = Type)) +
+    geom_line(aes(group = genre)) +
     theme_minimal() +
-    labs(title = paste("Top-N Recommendations vs Top Movies per genre", text, " ", datatext) , x = "Value", y = "Genre") +
+    labs(title = paste("Top-N Recommendations vs Top Movies per genre", text, " ", datatext), x = "Value", y = "Genre") +
     theme(plot.title = element_text(hjust = 0.5))
 }
 ```
 
 ```{r}
-#models und datensatz finden und zum titel hinzfuegen.
+# for each model and each dataset we want a cleveland plot
 listModel <- list("SVD3", "UBCF13", "IBCF22", "SVD_6")
-n_dataset <- list("For data 400", "For data 600")
+dataSetNames <- list("For data 400", "For data 600")
+userFavoritesLense400600 <- list(userFavorites, userFavorites400, userFavorites600)
 
-for (i in 1:length(n_dataset)) {
-  ourtitle <- n_dataset[i]
-  for (j in 1:length(n_models)) {
-    whichplot <- n_models[j]
-    b_df <- topnmonitor_fav_movies_list[[b_i]][1,2:20]
-    a_df <- top_n_list[[i]][1,2:20]
-    print(create_cleveland_plot(a_df, b_df, datatext_i, whichplot))
-  }
+# MovieLense
+for (i in 1:length(listModel)) {
+  dataTitle <- "MovieLense"
+  modelName <- listModel[i]
+  b_df <- userFavorites[1, 2:20]
+  a_df <- resultsList[[i]][1, 2:20]
+  print(makeCleveland(a_df, b_df, dataTitle, modelName))
+}
+# Dataset Reduced 400
+for (i in 1:length(listModel)) {
+  dataTitle <- "DS 400"
+  modelName <- listModel[i]
+  b_df <- userFavorites400[1, 2:20]
+  a_df <- resultsList400[[i]][1, 2:20]
+  print(makeCleveland(a_df, b_df, dataTitle, modelName))
+}
+# Dataset Reduced 600
+for (i in 1:length(listModel)) {
+  dataTitle <- "DS 600"
+  modelName <- listModel[i]
+  b_df <- userFavorites600[1, 2:20]
+  a_df <- resultsList600[[i]][1, 2:20]
+  print(makeCleveland(a_df, b_df, dataTitle, modelName))
 }
 ```
+As a visual quality measure for top N-lists from various recommenders, we have chosen the Cleveland Plot.
+The Cleveland Plot shows and compares several variables and in the case of
+of top N-lists, it allows a comparison between the users favorite movies and the movies recommended by the model.
+In the plot we see overlapping data points, which means that the model has recommended the same amount of movies as the user has rated.
+The further apart the data points are, the more the user's preferences and the model's recommendation deviates.
 
-topN_svd3 <- predict(svd3, Data, n = N)
-topN_ubcf13 <- predict(ubcf13, Data, n = N)
-topN_ibcf22 <- predict(ibcf22, Data, n = N)
-topN_svd6
+## 6.10.5 Definiere eine Qualitätsmetrik für Top-N Listen und teste sie
+As a good choice for a test metric, we compared cosine similarity and absolute difference.
+
+```{r}
+getMeanAbsoluteDifference <- function(df1, df2) {
+  matrix1 <- as.matrix(df1)
+  matrix2 <- as.matrix(df2)
+  if (!all(dim(matrix1) == dim(matrix2))) {
+    stop("The dimensions of the two matrices must be the same.")
+  }
+  absDifferences <- abs(matrix1 - matrix2)
+  meanAbsDifference <- mean(absDifferences, na.rm = TRUE)
+  return(meanAbsDifference)
+}
+MAE1 <- getMeanAbsoluteDifference(resultsList[[1]][,2:20], userFavorites[,2:20])
+MAE2 <- getMeanAbsoluteDifference(resultsList[[2]][,2:20], userFavorites[,2:20])
+MAE3 <- getMeanAbsoluteDifference(resultsList[[3]][,2:20], userFavorites[,2:20])
+MAE4 <- getMeanAbsoluteDifference(resultsList[[4]][,2:20], userFavorites[,2:20])
+
+MAE1_400 <- getMeanAbsoluteDifference(resultsList400[[1]][,2:20], userFavorites400[,2:20])
+MAE2_400 <- getMeanAbsoluteDifference(resultsList400[[2]][,2:20], userFavorites400[,2:20])
+MAE3_400 <- getMeanAbsoluteDifference(resultsList400[[3]][,2:20], userFavorites400[,2:20])
+MAE4_400 <- getMeanAbsoluteDifference(resultsList400[[4]][,2:20], userFavorites400[,2:20])
+
+MAE1_600 <- getMeanAbsoluteDifference(resultsList600[[1]][,2:20], userFavorites600[,2:20])
+MAE2_600 <- getMeanAbsoluteDifference(resultsList600[[2]][,2:20], userFavorites600[,2:20])
+MAE3_600 <- getMeanAbsoluteDifference(resultsList600[[3]][,2:20], userFavorites600[,2:20])
+MAE4_600 <- getMeanAbsoluteDifference(resultsList600[[4]][,2:20], userFavorites600[,2:20])
+
+paste("Full Movie Lense")
+paste("This was the MAE for SVD 3", MAE1)
+paste("This was the MAE for UBCF 13 (Cosine)", MAE2)
+paste("This was the MAE for IBCF 22 (Cosine)", MAE3)
+paste("This was the MAE for SVD 6", MAE4)
+
+paste("Reduced Data Set 400")
+paste("This was the MAE for SVD 3", MAE1_400)
+paste("This was the MAE for UBCF 13 (Cosine)", MAE2_400)
+paste("This was the MAE for IBCF 22 (Cosine)", MAE3_400)
+paste("This was the MAE for SVD 6", MAE4_400)
+
+paste("Reduced Data Set 600 (200 up to 600 users)")
+paste("This was the MAE for SVD 3", MAE1_600)
+paste("This was the MAE for UBCF 13 (Euclidean)", MAE2_600)
+paste("This was the MAE for IBCF 22 (Cosine)", MAE3_600)
+paste("This was the MAE for SVD 6", MAE4_600)
+```
+The disadvantage of the MAE is that it is hard to tell when the score is high or not.
+It depends on several factors, like:
+Rating Scale 
+Dataset and Domain Specifics 
+Comparison with Baselines
+User Satisfaction
+Distribution of Errors
+Goal of the Recommendation System
+It is therefore difficult to say whether our models have made correct predictions.
+
+Let us look at the cosine similarity.
+
+```{r}
+calculateCosineSimilarity <- function(df1, df2) {
+  matrix1 <- as.matrix(df1)
+  matrix2 <- as.matrix(df2)
+  
+  if (!all(dim(matrix1) == dim(matrix2))) {
+    stop("The dimensions of the two matrices must be the same.")
+  }
+
+  cosineSimilarity <- function(vec1, vec2) {
+    sum(vec1 * vec2) / (sqrt(sum(vec1^2)) * sqrt(sum(vec2^2)))
+  }
+  
+  similarities <- mapply(cosineSimilarity, as.data.frame(t(matrix1)), as.data.frame(t(matrix2)))
+  
+  meanSimilarity <- mean(similarities, na.rm = TRUE)
+  return(meanSimilarity)
+}
+
+cosine1 <- calculateCosineSimilarity(resultsList[[1]][,2:20], userFavorites[,2:20])
+cosine2 <- calculateCosineSimilarity(resultsList[[2]][,2:20], userFavorites[,2:20])
+cosine3 <- calculateCosineSimilarity(resultsList[[3]][,2:20], userFavorites[,2:20])
+cosine4 <- calculateCosineSimilarity(resultsList[[4]][,2:20], userFavorites[,2:20])
+
+cosine1_400 <- calculateCosineSimilarity(resultsList400[[1]][,2:20], userFavorites[,2:20])
+cosine2_400 <- calculateCosineSimilarity(resultsList400[[2]][,2:20], userFavorites[,2:20])
+cosine3_400 <- calculateCosineSimilarity(resultsList400[[3]][,2:20], userFavorites[,2:20])
+cosine4_400 <- calculateCosineSimilarity(resultsList400[[4]][,2:20], userFavorites[,2:20])
+
+cosine1_600 <- calculateCosineSimilarity(resultsList600[[1]][,2:20], userFavorites[,2:20])
+cosine2_600 <- calculateCosineSimilarity(resultsList600[[2]][,2:20], userFavorites[,2:20])
+cosine3_600 <- calculateCosineSimilarity(resultsList600[[3]][,2:20], userFavorites[,2:20])
+cosine4_600 <- calculateCosineSimilarity(resultsList600[[4]][,2:20], userFavorites[,2:20])
+
+paste("Full Movie Lense")
+paste("This was the Cosine for SVD 3", cosine1)
+paste("This was the Cosine for UBCF 13 (Euclidean)", cosine2)
+paste("This was the Cosine for IBCF 22 (Cosine)", cosine3)
+paste("This was the Cosine for SVD 6", cosine4)
+
+paste("Reduced Data Set 400")
+paste("This was the Cosine for SVD 3", cosine1_400)
+paste("This was the Cosine for UBCF 13 (Cosine)", cosine2_400)
+paste("This was the Cosine for IBCF 22 (Cosine)", cosine3_400)
+paste("This was the Cosine for SVD 6", cosine4_400)
+
+paste("Reduced Data Set 600 (200 up to 600 users)")
+paste("This was the Cosine for SVD 3", cosine1_600)
+paste("This was the Cosine for UBCF 13 (Cosine)", cosine1_600)
+paste("This was the Cosine for IBCF 22 (Cosine)", cosine1_600)
+paste("This was the Cosine for SVD 6", cosine1_600)
+```
+We choose the cosine instead of the mean absolute error because it is clear that
+if the metric is close to 1, the vectors are more similar.
+We took the mean of all cosine similarities across n users,
+to obtain a single measure between the user preference and model prediction vectors.
+This gave us a single measure that we could use to create a summary statistic to help interpret and compare the overall similarity of user preferences.
+For the mean absolute error, this was not so clear.
+The best model we could find in the previous chapter was an SVD model with k singular values.
+Here, SVD provides the best overall result for the reduced data set with 400 highest rated users.
+
+
+
