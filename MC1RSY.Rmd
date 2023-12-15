@@ -1316,20 +1316,20 @@ compareModels <- function(ibcf, ubcf) {
   print(paste("Proportion UBCF:", length(intersect_) / nrow(ubcf) * 100))
 }
 
-print("First Reduction without Normalization")
+print("Second Reduction Dataset without Normalization")
 compareModels(ibcfTopNdataFrame2, ubcfTopNdataFrame2)
 ```
 First Reduction Set:
-IBCF recommends 398 movies.
-UBCF recommends 231 movies.
-The intersect between both recommenders for the first reduced dataset is 144 movies.
-The relative intersect for IBCF is 36% and for UBCF it is 62%.
+IBCF recommends 378 movies.
+UBCF recommends 235 movies.
+The intersect between both recommenders for the first reduced dataset is 147 movies.
+The relative intersect for IBCF is 38% and for UBCF it is 62%.
 
 Second Reduction Set:
-IBCF recommends 363 movies.
-UBCF recommends 236 movies.
-The intersect between both recommenders for the first reduced dataset is 112 movies.
-The relative intersect for IBCF is 31% and for UBCF it is 47%.
+IBCF recommends 355 movies.
+UBCF recommends 251 movies.
+The intersect between both recommenders for the first reduced dataset is 121 movies.
+The relative intersect for IBCF is 34% and for UBCF it is 48%.
 We see that the intersect is lower than before because we have fewer user ratings to work with.
 
 Both methods are not giving similar recommendations.
@@ -1407,10 +1407,10 @@ compareModels <- function(ibcf, ubcf) {
 print("First Reduction with Normalization")
 compareModels(ibcfTopNdataFrameNorm, ubcfTopNdataFrameNorm)
 ```
-IBCF with normalized data recommends 389 films.
-UBCF with normalized data recommends 205 films.
-The intersection between the two recommenders for the first reduced data set (normalized) is 122 films.
-The relative intersection for IBCF is 32% and for UBCF 59%.
+IBCF with normalized data recommends 435 films.
+UBCF with normalized data recommends 236 films.
+The intersection between the two recommenders for the first reduced data set (normalized) is 167 films.
+The relative intersection for IBCF is 38% and for UBCF 70%.
 The results are similar to those without normalized ratings.
 The UBCF recommendations are lower than before because they include people with the same taste in movies
 and different rating strengths (4 might be a very good rating for some people and not for others).
