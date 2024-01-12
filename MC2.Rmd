@@ -1,15 +1,249 @@
 ---
-title: "MC2 Haris"
-output: html_notebook
+title: "MC2"
+author: "Haris"
+output: 
+  html_notebook:
+    toc: True
+    toc_float: True
 ---
-
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
 
+# 7.1 Erzeugung von Film- & Nutzerprofilen [20 Punkte]
+## 1. MovieLense Daten einlesen,
+## 2. Binäre User-Liked-Items Matrix für alle Nutzer erzeugen,
+## 3. Dimension der User-Liked-Items Matrix prüfen und ausgeben,
+## 4. Movie-Genre Matrix für alle Filme erzeugen,
+## 5. Dimension der Movie-Genre Matrix prüfen und ausgeben,
+## 6. Anzahl unterschiedlicher Filmprofile bestimmen und visualisieren,
+## 7. Nutzerprofile im Genre-Vektorraum erzeugen,
+## 8. Dimension der User-Genre-Profil Matrix prüfen und ausgeben,
+## 9. Anzahl unterschiedlicher Nutzerprofile bestimmen, wenn Stärke der Genre-Kombination (a) vollständig (b) binär berücksichtigt wird.
+
 ```{r}
-plot(cars)
+library(tidyverse)
+library(recommenderlab)
 ```
+
+## 1. MovieLense Daten einlesen
+```{r}
+data("MovieLense")
+```
+
+## 2. Binäre User-Liked-Items Matrix für alle Nutzer erzeugen,
+```{r}
+UIB <- binarize(MovieLense, minRating = 4)
+
+UIB <- as(UIB, "matrix")
+
+UIB[1:5, 1:5]
+```
+In der UIB (User Item Binär) Matrix sind Ratings kleiner als 4 mit False und sonst True kodiert.
+
+## 3. Dimension der User-Liked-Items Matrix prüfen und ausgeben
+```{r}
+dim(UIB)
+```
+Die Matrix UIB hat 943 User und 1664 Filme.
+
+## 4. Movie-Genre Matrix für alle Filme erzeugen
+```{r}
+movieGenreDf <- MovieLenseMeta %>% select(-c(year, url))
+rownames(movieGenreDf) <- movieGenreDf[,1]
+movieGenreDf <- movieGenreDf %>% select(-c(title))
+MGM <- as.matrix(movieGenreDf)
+MGM[1:3, 1:3]
+```
+Wir sehen die ersten drei Zeilen (Filme) und die ersten drei Spalten (Genres) mit unknown, Action und Adventure.
+Falls das Genre zustimmt für den Film steht eine 1 sonst 0.
+
+## 5. Dimension der Movie-Genre Matrix prüfen und ausgeben,
+```{r}
+dim(MGM)
+```
+MGM (Movie Genre Matrix) hat 1664 Zeilen als Filme und 19 Spalten als Genres.
+
+## 6. Anzahl unterschiedlicher Filmprofile bestimmen und visualisieren
+```{r}
+getMovieGenreMatrix <- function(movieLenseMeta) {
+  movieGenreDf <- movieLenseMeta %>% select(-c(year, url))
+  rownames(movieGenreDf) <- movieGenreDf[, 1]
+  movieGenreDf <- movieGenreDf %>% select(-c(title))
+  MGM <- as.matrix(movieGenreDf)
+  return(MGM)
+}
+
+MGM <- getMovieGenreMatrix(MovieLenseMeta)
+
+genreColNames <- colnames(MGM)
+
+for (colName in genreColNames) {
+  MGM[, colName] <- ifelse(MGM[, colName] == 1, colName, NA)
+}
+
+MGMdf <- as.data.frame(MGM)
+
+# Concatenate row-wise with a separator
+MGMdfConcat <- MGMdf %>%
+  unite("profile", sep = ".", na.rm = TRUE, remove = TRUE)
+
+# Group by profile, count the occurrences and arrange in descending order
+genreCounts <- MGMdfConcat %>%
+  group_by(profile) %>%
+  summarise(Anzahl = n()) %>%
+  arrange(desc(Anzahl))
+
+# Select the top 20 profiles by count and arrange them by count
+top20Genres <- genreCounts %>%
+  head(20) %>%
+  arrange(Anzahl)
+
+# Create a bar plot
+ggplot(top20Genres, aes(x = Anzahl, y = profile, fill = "blue")) +
+  geom_bar(stat = "identity") + 
+  labs(title = "Genre Combinations and Occurencies (MovieProfiles)", 
+       x = "Occurencies", 
+       y = "Genre",
+       subtitle = "MovieLens Dataset") +
+  theme(legend.position = "none")
+```
+Wir sehen im Plot die Kombination diverser Genres und deren Häufigkeit.
+Drama taucht am häufigsten auf, gefolgt von Comedy.
+
+## 7. Nutzerprofile im Genre-Vektorraum erzeugen
+```{r}
+MGM <- getMovieGenreMatrix(MovieLenseMeta)
+UIB <- as.matrix(UIB)
+MGM <- as.matrix(MGM)
+
+# If the matrices contain non-numeric data
+UIB <- apply(UIB, 2, as.numeric)
+MGM <- apply(MGM, 2, as.numeric)
+
+# matrix multiplication
+# UGM = User Genre Matrix
+UGM <- UIB %*% MGM
+
+# UGPdf = User Genre Profile Data Frame
+UGPdf <- as.data.frame(UGM)
+head(UGPdf)
+```
+Wir sehen die Nutzerprofile, d.h. zu jeder Nutzerin wie häufig ihr ein Genre gefallen hat,
+basierend auf ihren Ratings (Binäre User-Liked-Items Matrix).
+
+## 8. Dimension der User-Genre-Profil Matrix prüfen und ausgeben,
+```{r}
+dim(UGPdf)
+```
+943 Userinnen und 19 Genres.
+
+## 9. Anzahl unterschiedlicher Nutzerprofile bestimmen, wenn Stärke der Genre-Kombination (a) vollständig (b) binär berücksichtigt wird.
+```{r}
+# (a) vollständig
+print(paste("Unterschiedliche Nutzerprofile vollständig:", nrow(unique(UGPdf))))
+# (b) binär
+UPB <- UGPdf > (2 * rowMeans(UGPdf))
+print(paste("Unterschiedliche Nutzerprofile Binär:", nrow(unique(UPB))))
+```
+Eine nicht-binäre User Profile Matrix hat nur unterschiedliche Nutzerprofile.
+Eine binäre User Profile Matrix hat in diesem Fall 137 unterschiedliche Nutzerprofile.
+
+# 7.2 Ähnlichkeit von Nutzern und Filmen [10 Punkte]
+## 1. Cosinus-Ähnlichkeit zwischen User-Genre- und Movie-Genre-Matrix berechnen.
+## 2. Dimension der Matrix der Cosinus-Ähnlichkeiten von Nutzern und Filmen prüfen uns ausgeben.
+## 3. 5-Zahlen Statistik für Matrix der Cosinus-Ähnlichkeiten prüfen uns ausgeben.
+## 4. Cosinus-Ähnlichkeiten von Nutzern und Filmen mit Dichteplot visualisieren.
+## 5. Cosinus-Ähnlichkeiten von Nutzern und Filmen mit Dichteplot für Nutzer “241”, “414”, “477”, “526”, “640” und “710” visualisieren.
+
+## 1. Cosinus-Ähnlichkeit zwischen User-Genre- und Movie-Genre-Matrix berechnen.
+```{r}
+getCosineSim <- function(M, A) {
+  MA_T <- M %*% t(A)
+  l2NormM <- sqrt(rowSums(M^2))
+  l2NormA <- sqrt(rowSums(A^2))
+  l2Norm <- l2NormM %*% t(l2NormA)
+  return(MA_T / l2Norm)
+}
+cosine_UGM_MGM <- getCosineSim(UGM, MGM)
+```
+Die folgende Funktion berechnet die Kosinus Ähnlichkeit zwischen zwei Matrizen,
+in diesem Fall zwischen der User-Genre-Matrix und Movie-Genre-Matrix.
+
+## 2. Dimension der Matrix der Cosinus-Ähnlichkeiten von Nutzern und Filmen prüfen uns ausgeben.
+```{r}
+dim(cosine_UGM_MGM)
+```
+Die Ähnlichkeitsmatrix hat 943 Zeilen (User) und 1664 Spalten (Filme)
+
+## 3. 5-Zahlen Statistik für Matrix der Cosinus-Ähnlichkeiten prüfen uns ausgeben.
+```{r}
+v <- as.vector(cosine_UGM_MGM)
+summary(v)
+```
+Wir können prüfen ob die Ähnlichkeitsmatrix korrekt berechnet wurden,
+indem das Intervall von Min. und Max. zwischen [0, 1] liegt, was hier der Fall zu sein scheint.
+
+## 4. Cosinus-Ähnlichkeiten von Nutzern und Filmen mit Dichteplot visualisieren.
+```{r}
+density <- data.frame(x = as.vector(cosine_UGM_MGM))
+ggplot(density, aes(x)) +
+  geom_density() +
+  labs(title = "Density Plot of Cosine Similarity between Users and Movies", x = "Cosine Similarity", y = "Density") +
+  theme_minimal()
+```
+Im Dichteplot sehen wir sehr viele Werte nahe bei Null.
+Die meisten Werte befinden sich aber im Intervall [0.25, 0.75].
+
+## 5. Cosinus-Ähnlichkeiten von Nutzern und Filmen mit Dichteplot für Nutzer “241”, “414”, “477”, “526”, “640” und “710” visualisieren.
+```{r}
+ggplot() +
+  geom_density(aes(cosine_UGM_MGM[, 241], color = "Genre 1"), fill = "yellow", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 414], color = "Genre 2"), fill = "green", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 477], color = "Genre 3"), fill = "blue", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 526], color = "Genre 4"), fill = "orange", alpha = 0.05) +
+  #geom_density(aes(cosine_UGM_MGM[, 640], color = "Genre 5"), fill = "black", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 710], color = "Genre 6"), fill = "purple", alpha = 0.05) +
+  labs(
+    title = "Density Plot of Cosine Similarity between Users and Genres",
+    x = "Cosine Similarity",
+    y = "Density"
+  ) +
+  scale_color_manual(
+    name = "Genres",
+    values = c("Genre 1" = "yellow", "Genre 2" = "green", "Genre 3" = "blue", 
+               "Genre 4" = "orange", "Genre 6" = "purple")
+  ) +
+  theme_minimal()
+```
+```{r}
+ggplot() +
+  geom_density(aes(cosine_UGM_MGM[, 241], color = "Genre 1"), fill = "yellow", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 414], color = "Genre 2"), fill = "green", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 477], color = "Genre 3"), fill = "blue", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 526], color = "Genre 4"), fill = "orange", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 640], color = "Genre 5"), fill = "black", alpha = 0.05) +
+  geom_density(aes(cosine_UGM_MGM[, 710], color = "Genre 6"), fill = "purple", alpha = 0.05) +
+  labs(
+    title = "Density Plot of Cosine Similarity between Users and Genres",
+    x = "Cosine Similarity",
+    y = "Density"
+  ) +
+  scale_color_manual(
+    name = "Genres",
+    values = c("Genre 1" = "yellow", "Genre 2" = "green", "Genre 3" = "blue", 
+               "Genre 4" = "orange", "Genre 5" = "black", "Genre 6" = "purple")
+  ) +
+  theme_minimal()
+```
+
+Wir sehen für Genre 5 einen starken Anstieg nahe 0, d.h. viele
+Nutzerinnen haben keine Ähnlichkeit mit diesem Genre.
+Wir müssen Genre 5 aus der Visualisierung entfernen, 
+weil wir sonst die restliche nicht miteinander vergleichen können.
+Genre 4 hat weniger Ähnlichkeit mit den Nutzerinnen, 
+und liegt mehr im Bereich von 0.25.
+Genre 1, 2 und 3 scheinen Ähnlichkeiten mit den Nutzerinnen zu teilen.
+Genre 6 ist den Nutzerinnen am ähnlichsten. 
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
 
