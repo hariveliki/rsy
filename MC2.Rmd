@@ -1,24 +1,18 @@
 ---
-title: "MC2"
-author: "Haris"
-output: 
+title: "MC2 - Content-based Recommender System"
+author: "Haris Alic"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
   html_notebook:
-    toc: True
-    toc_float: True
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
 ---
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
-
 # 7.1 Erzeugung von Film- & Nutzerprofilen [20 Punkte]
-## 1. MovieLense Daten einlesen,
-## 2. Binäre User-Liked-Items Matrix für alle Nutzer erzeugen,
-## 3. Dimension der User-Liked-Items Matrix prüfen und ausgeben,
-## 4. Movie-Genre Matrix für alle Filme erzeugen,
-## 5. Dimension der Movie-Genre Matrix prüfen und ausgeben,
-## 6. Anzahl unterschiedlicher Filmprofile bestimmen und visualisieren,
-## 7. Nutzerprofile im Genre-Vektorraum erzeugen,
-## 8. Dimension der User-Genre-Profil Matrix prüfen und ausgeben,
-## 9. Anzahl unterschiedlicher Nutzerprofile bestimmen, wenn Stärke der Genre-Kombination (a) vollständig (b) binär berücksichtigt wird.
 
 ```{r}
 library(tidyverse)
@@ -38,7 +32,7 @@ UIB <- as(UIB, "matrix")
 
 UIB[1:5, 1:5]
 ```
-In der UIB (User Item Binär) Matrix sind Ratings kleiner als 4 mit False und sonst True kodiert.
+In der UIB (User Item Binär) Matrix sind Ratings kleiner als 4 mit False und sonst als True kodiert.
 
 ## 3. Dimension der User-Liked-Items Matrix prüfen und ausgeben
 ```{r}
@@ -51,11 +45,14 @@ Die Matrix UIB hat 943 User und 1664 Filme.
 movieGenreDf <- MovieLenseMeta %>% select(-c(year, url))
 rownames(movieGenreDf) <- movieGenreDf[,1]
 movieGenreDf <- movieGenreDf %>% select(-c(title))
+```
+
+```{r}
 MGM <- as.matrix(movieGenreDf)
 MGM[1:3, 1:3]
 ```
-Wir sehen die ersten drei Zeilen (Filme) und die ersten drei Spalten (Genres) mit unknown, Action und Adventure.
-Falls das Genre zustimmt für den Film steht eine 1 sonst 0.
+Wir sehen die ersten drei Zeilen (Filme) und die ersten drei Spalten (Genres) mit Unknown, Action und Adventure.
+Falls das Genre zustimmt für den Film, steht eine 1 sonst 0.
 
 ## 5. Dimension der Movie-Genre Matrix prüfen und ausgeben,
 ```{r}
@@ -107,6 +104,7 @@ ggplot(top20Genres, aes(x = Anzahl, y = profile, fill = "blue")) +
        subtitle = "MovieLens Dataset") +
   theme(legend.position = "none")
 ```
+
 Wir sehen im Plot die Kombination diverser Genres und deren Häufigkeit.
 Drama taucht am häufigsten auf, gefolgt von Comedy.
 
@@ -128,6 +126,7 @@ UGM <- UIB %*% MGM
 UGPdf <- as.data.frame(UGM)
 head(UGPdf)
 ```
+
 Wir sehen die Nutzerprofile, d.h. zu jeder Nutzerin wie häufig ihr ein Genre gefallen hat,
 basierend auf ihren Ratings (Binäre User-Liked-Items Matrix).
 
@@ -135,7 +134,7 @@ basierend auf ihren Ratings (Binäre User-Liked-Items Matrix).
 ```{r}
 dim(UGPdf)
 ```
-943 Userinnen und 19 Genres.
+943 Nutzerinnen und 19 Genres.
 
 ## 9. Anzahl unterschiedlicher Nutzerprofile bestimmen, wenn Stärke der Genre-Kombination (a) vollständig (b) binär berücksichtigt wird.
 ```{r}
@@ -145,15 +144,10 @@ print(paste("Unterschiedliche Nutzerprofile vollständig:", nrow(unique(UGPdf)))
 UPB <- UGPdf > (2 * rowMeans(UGPdf))
 print(paste("Unterschiedliche Nutzerprofile Binär:", nrow(unique(UPB))))
 ```
-Eine nicht-binäre User Profile Matrix hat nur unterschiedliche Nutzerprofile.
+Eine nicht-binäre User-Profil-Matrix hat nur unterschiedliche Nutzerprofile.
 Eine binäre User Profile Matrix hat in diesem Fall 137 unterschiedliche Nutzerprofile.
 
 # 7.2 Ähnlichkeit von Nutzern und Filmen [10 Punkte]
-## 1. Cosinus-Ähnlichkeit zwischen User-Genre- und Movie-Genre-Matrix berechnen.
-## 2. Dimension der Matrix der Cosinus-Ähnlichkeiten von Nutzern und Filmen prüfen uns ausgeben.
-## 3. 5-Zahlen Statistik für Matrix der Cosinus-Ähnlichkeiten prüfen uns ausgeben.
-## 4. Cosinus-Ähnlichkeiten von Nutzern und Filmen mit Dichteplot visualisieren.
-## 5. Cosinus-Ähnlichkeiten von Nutzern und Filmen mit Dichteplot für Nutzer “241”, “414”, “477”, “526”, “640” und “710” visualisieren.
 
 ## 1. Cosinus-Ähnlichkeit zwischen User-Genre- und Movie-Genre-Matrix berechnen.
 ```{r}
@@ -173,7 +167,7 @@ in diesem Fall zwischen der User-Genre-Matrix und Movie-Genre-Matrix.
 ```{r}
 dim(cosine_UGM_MGM)
 ```
-Die Ähnlichkeitsmatrix hat 943 Zeilen (User) und 1664 Spalten (Filme)
+Die Ähnlichkeitsmatrix hat 943 Zeilen (Nutzerinnen) und 1664 Spalten (Filme)
 
 ## 3. 5-Zahlen Statistik für Matrix der Cosinus-Ähnlichkeiten prüfen uns ausgeben.
 ```{r}
@@ -181,7 +175,7 @@ v <- as.vector(cosine_UGM_MGM)
 summary(v)
 ```
 Wir können prüfen ob die Ähnlichkeitsmatrix korrekt berechnet wurden,
-indem das Intervall von Min. und Max. zwischen [0, 1] liegt, was hier der Fall zu sein scheint.
+indem das Intervall von Min. und Max. zwischen [0, 1] liegt, was hier der Fall ist.
 
 ## 4. Cosinus-Ähnlichkeiten von Nutzern und Filmen mit Dichteplot visualisieren.
 ```{r}
@@ -191,6 +185,7 @@ ggplot(density, aes(x)) +
   labs(title = "Density Plot of Cosine Similarity between Users and Movies", x = "Cosine Similarity", y = "Density") +
   theme_minimal()
 ```
+
 Im Dichteplot sehen wir sehr viele Werte nahe bei Null.
 Die meisten Werte befinden sich aber im Intervall [0.25, 0.75].
 
@@ -243,11 +238,177 @@ weil wir sonst die restliche nicht miteinander vergleichen können.
 Genre 4 hat weniger Ähnlichkeit mit den Nutzerinnen, 
 und liegt mehr im Bereich von 0.25.
 Genre 1, 2 und 3 scheinen Ähnlichkeiten mit den Nutzerinnen zu teilen.
-Genre 6 ist den Nutzerinnen am ähnlichsten. 
+Genre 6 ist den Nutzerinnen am ähnlichsten.
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+# 7.3 Empfehlbare Filme [6 Punkte]
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+## 1. Bewertete Filme maskieren, d.h. “Negativabzug” der User-Items Matrix erzeugen, um anschliessend Empfehlungen herzuleiten.
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+URM <- as(MovieLense, "matrix")
+URMmasked <- is.na(URM)
+URMmasked[1:4, 1:4]
+```
+Um den Negativabzug der User-Item Matrix zu erzeugen, werden fehlende Werte mit
+der Funktion is.na() auf True und sonst False gesetzt.
+
+## 2. Zeilensumme des “Negativabzuges” der User-Items Matrix für die User “5”, “25”, “50” und “150” ausgeben.
+```{r}
+userSums <- rowSums(URMmasked)[c(5, 25, 50, 150)]
+relative <- userSums / ncol(URM)
+userSums
+relative
+```
+Alle vier User haben mehr als 1000 Filme bewertet.
+Damit liegen sie im Bereich von 90% und höher, im Bezug auf fehlende Bewertungen.
+
+## 3. 5-Zahlen Statistik der Zeilensumme des “Negativabzuges” der User-Items Matrix bestimmen.
+```{r}
+summary(rowSums(URMmasked))
+```
+Es gibt eine oder mehrere Nutzerinnen die noch 929 Filme von 1664 nicht bewertet haben.
+Im Durchschnitt haben die Nutzerinnen 1559 Filme nicht bewertet.
+25% von allen Nutzerinnen haben 1516 Filme nicht bewertet und 75% von allen Nutzerinnen
+haben 1632 Filme nicht bewertet.
+
+# 7.4 Top-N Empfehlungen [12 Punkte]
+
+## 1. Matrix für Bewertung aller Filme durch element-weise Multiplikation der Matrix der CosinusÄhnlichkeiten von Nutzern und Filmen und “Negativabzug” der User-Items Matrix erzeugen.
+```{r}
+URM_CS <- URMmasked * cosine_UGM_MGM
+URM_CS[1:3, 1:4]
+```
+Die maskierte User Rating Matrix mit der Cosinus Ähnlichkeitsmatrix zwischen User-Genre und Movie-Genre erzeugt eine neue Matrix die 0 aufweist, falls die Filme vom User schon bewertet wurden.
+Werte ungleich Null sind Ähnlichkeiten zwischen Nutzerinnen und Filmen.
+
+## 2. Dimension der Matrix für die Bewertung aller Filme prüfen.
+```{r}
+dim(URM_CS)
+```
+Die Dimensionen sind gleichbleibend.
+
+## 3. Top-20 Listen extrahieren und Länge der Listen pro Nutzer prüfen.
+```{r}
+getTopNList <- function(n, R) {
+  topN <- matrix(0, dim(R), n)
+  for (userId in rownames(R)) {
+    topN[as.numeric(userId), ] <- names(sort(R[userId, ], decreasing = TRUE)[1:n])
+  }
+  return(topN)
+}
+
+top20 <- getTopNList(20, URM_CS)
+top20[1:5, 1:5]
+```
+Die Funktion liefert die Top-N Liste für den jeweiligen User basierend auf der 
+Ähnlichkeits-Matrix aus der vorangegangen Aufgabe.
+
+## 4. Verteilung der minimalen Ähnlichkeit für Top-N Listen für N = 10, 20, 50, 100 für alle Nutzer visuell vergleichen.
+```{r}
+getTopNListSim <- function(n, R) {
+  topN <- matrix(0, dim(R), n)
+  for (userId in rownames(R)) {
+    topN[as.numeric(userId), ] <- sort(R[userId, ], decreasing = TRUE)[1:n]
+  }
+  return(topN)
+}
+
+simN10 <- tibble(x = getTopNListSim(10, URM_CS)[, 10])
+simN50 <- tibble(x = getTopNListSim(50, URM_CS)[, 50])
+simN100 <- tibble(x = getTopNListSim(100, URM_CS)[, 100])
+```
+Die Funktion liefert die Top-N Liste als Ähnlichkeitswerte.
+Wir gehen davon aus, dass je mehr Filme empfohlen werden, desto weniger ähnlich
+sind sie zu der Nutzerin.
+
+```{r}
+ggplot(simN10, aes(x)) +
+  geom_histogram(binwidth = 0.005, na.rm = TRUE) +
+  xlim(0, 1) +
+  ylim(0, 35) +
+  labs(title = "Similarity Distribution of Top 10 Recommendations of all Users", x = "Similarity", y = "Occurencies") +
+  theme_minimal()
+```
+
+Für die top 10 Produkte liegen die meisten Ähnlichkeiten zwischen 0.70 und 0.9.
+
+```{r}
+ggplot(simN50, aes(x)) +
+  geom_histogram(binwidth = 0.005, na.rm = TRUE) +
+  xlim(0, 1) +
+  ylim(0, 35) +
+  labs(title = "Similarity Distribution of Top 50 Recommendations of all Users", x = "Similarity", y = "Occurencies") +
+  theme_minimal()
+```
+
+Wir sehen bei 50 schon einen guten Versatz der Verteilung Richtung links (weniger ähnlich).
+
+```{r}
+ggplot(simN100, aes(x)) +
+  geom_histogram(binwidth = 0.005, na.rm = TRUE) +
+  xlim(0, 1) +
+  ylim(0, 35) +
+  labs(title = "Similarity Distribution of Top 100 Recommendations of all Users", x = "Similarity", y = "Occurencies") +
+  theme_minimal()
+```
+
+Vergleichen wir die Top 10 und die Top 100, sehen wir den Unterschied ganz klar.
+Je mehr wir empfehlen, desto kleiner ist der Ähnlichkeitswert zwischen der Nutzerin und dem Film.
+
+## 5. Top-20 Empfehlungen für Nutzer “5”, “25”, “50”, “150” visualisieren.
+```{r}
+# some bug, had to refactor topNList function
+getTopNList <- function(N, URM) {
+  topNList <- list()
+  nUser <- dim(URM)[1]
+  nMovies <- dim(URM)[2]
+  for (user in 1:nUser) {
+    topNList[[user]] <- sort(URM[user, ], decreasing=TRUE)[1:N]
+  }
+  return(topNList)
+}
+
+plotCleveland <- function(URM, N, user) {
+  topNList <- getTopNList(N, URM)
+  topNUser <- topNList[[user]]
+  simUser <- as.numeric(topNUser)
+  movies <- names(topNUser)
+  topNdf <- data.frame(movies, simUser)
+  ggplot(topNdf, aes(x = simUser, y = movies)) + 
+    geom_point() + 
+    labs(title = paste("Top", N, "Recommendations for User", user), 
+       x = "Similarity", 
+       y = "Movie",
+       subtitle = "MovieLense Dataset")
+}
+
+for (user in c(5, 25, 50, 150)) {
+  print(plotCleveland(URM_CS, 20, user))
+}
+```
+
+Im Cleveland Plot mit den den Top 20 Film Empfehlungen und den Ähnlichkeiten sehen wir für die User folgendes:
+User 5: Hat eine ausgeglichene Auswahl bekommen mit hohen Werten zwischen 0.7 und 0.8.
+User 25: Sieht man schon ein Cluster im Bereich von 0.65, entweder hat dieser nur wenige Filme bewertet oder ähnliche Filme bewertet.
+User 50: Sieht man klar das dieser nur das vorgeschlagen bekommt, was er schon gesehen/bewertet hat, weil er vielleicht nur wenige Bewertungen gegeben hat.
+Die diversity in dieser Empfehlung ist schlecht. Content-based Modelle tendieren dazu, nur vorzuschlagen was von der Nutzerin gemocht wurde.
+User 150: Sieht man ein Cluster im höheren Ende der Ähnlichkeitsskala, mit einer gewissen Varianz, diese Liste scheint eine gute Balance zu finden.
+
+## 6. Für Nutzer “133” und “555” Profil mit Top-N Empfehlungen für N = 20, 30, 40, 50 analysieren, visualisieren und diskutieren.
+```{r}
+Ns <- c(20,30,40,50)
+users <- c(133, 555)
+rowSums(URMmasked[users,])
+```
+```{r}
+for (n in Ns) {
+  for (user in users) {
+    print(plotCleveland(URM_CS, n, user))
+  }
+}
+```
+
+Der Content-Based Recommender schlägt für die Nutzerin 133 sehr eintönige Bewertungen vor, dies kann daran liegen das diese wenige oder immer die gleiche Art von Genres bewertet hat.
+Nutzerin 133 hat auch weniger Bewertungen abgegeben 1664-1638 = 26, im Vergleich zu User 555, 1664 - 1612 = 52.
+Der Recommender schlägt bei der Nutzerin 555 schon eine grössere Varianz vor. Man sieht auch für grössere N, dass die Werte sich den User Profilen nähern.
 
